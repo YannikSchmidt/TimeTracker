@@ -1,6 +1,6 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { DateTimeField } from '../../components/DateTimeField';
 import { DimensionPicker } from '../../components/ValuePicker';
@@ -26,6 +26,8 @@ export default function EntryScreen() {
   const [note, setNote] = useState('');
   const [valueIds, setValueIds] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(isNew);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (entry && !loaded) {
     setStartAt(entry.startAt);
@@ -47,22 +49,19 @@ export default function EntryScreen() {
       });
       router.back();
     } catch (e) {
-      Alert.alert('Speichern nicht möglich', e instanceof Error ? e.message : String(e));
+      setError(`Speichern nicht möglich: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
-  const remove = () =>
-    Alert.alert('Eintrag löschen?', 'Das kann nicht rückgängig gemacht werden.', [
-      { text: 'Abbrechen', style: 'cancel' },
-      {
-        text: 'Löschen',
-        style: 'destructive',
-        onPress: async () => {
-          await mutate((r) => r.entries.remove(id));
-          router.back();
-        },
-      },
-    ]);
+  // Zweistufig statt Dialog – funktioniert auf allen Plattformen gleich.
+  const remove = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    await mutate((r) => r.entries.remove(id));
+    router.back();
+  };
 
   if (!loaded) return null;
 
@@ -99,8 +98,19 @@ export default function EntryScreen() {
         </View>
       </Card>
 
+      {error && <Text style={{ color: p.danger }}>{error}</Text>}
       <Button title="Speichern" icon="checkmark" onPress={save} disabled={invalid} />
-      {!isNew && <Button title="Löschen" icon="trash-outline" variant="danger" onPress={remove} />}
+      {!isNew && (
+        <View style={{ gap: spacing.sm }}>
+          <Button
+            title={confirmDelete ? 'Wirklich löschen?' : 'Löschen'}
+            icon="trash-outline"
+            variant={confirmDelete ? 'danger' : 'secondary'}
+            onPress={remove}
+          />
+          {confirmDelete && <Button title="Abbrechen" variant="secondary" onPress={() => setConfirmDelete(false)} />}
+        </View>
+      )}
     </ScrollView>
   );
 }

@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { newId } from '../../db/ids';
 import type { Entry, Millis } from '../../domain/types';
 import type { EntryInput, EntryRepository } from '../types';
+import { validateEntry } from '../validation';
 
 interface EntryRow {
   id: string;
@@ -25,12 +26,6 @@ function toEntry(row: EntryRow, valueIds: string[]): Entry {
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
   };
-}
-
-export function validateEntry(input: Pick<EntryInput, 'startAt' | 'endAt'>): void {
-  if (input.endAt !== null && input.endAt <= input.startAt) {
-    throw new Error('Das Ende muss nach dem Start liegen.');
-  }
 }
 
 export class SqliteEntryRepository implements EntryRepository {

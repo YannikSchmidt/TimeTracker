@@ -28,6 +28,15 @@ npx expo start
 Den angezeigten QR-Code mit Expo Go (Android) bzw. der Kamera-App (iPhone) scannen. Handy und Rechner müssen im
 selben WLAN sein – sonst `npx expo start --tunnel` verwenden.
 
+### Ohne Rechner: Browser-Vorschau
+
+```bash
+npm run build:preview   # → dist-preview/timetracker.html (eine Datei, alles eingebettet)
+```
+
+Die Datei läuft in jedem Browser, auch auf dem Handy. Im Browser werden die Daten im `localStorage`
+gespeichert statt in SQLite, und Export/Backup sind dort ausgeblendet.
+
 Eine installierbare App (APK / TestFlight) lässt sich später mit [EAS Build](https://docs.expo.dev/build/introduction/) erzeugen.
 
 ## Entwicklung

@@ -3,7 +3,7 @@ import { File, Paths } from 'expo-file-system';
 import { isAvailableAsync, shareAsync } from 'expo-sharing';
 import { format } from 'date-fns';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
@@ -23,6 +23,7 @@ export default function SettingsScreen() {
   const [hours, setHours] = useState('');
   const [newDimName, setNewDimName] = useState('');
   const [newDimMulti, setNewDimMulti] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
 
   const [hoursFor, setHoursFor] = useState<number | null>(null);
   if (settings && settings.weeklyTargetHours !== hoursFor) {
@@ -63,7 +64,7 @@ export default function SettingsScreen() {
     if (await isAvailableAsync()) {
       await shareAsync(file.uri, { mimeType, dialogTitle: name });
     } else {
-      Alert.alert('Teilen nicht verfügbar', `Datei gespeichert unter:\n${file.uri}`);
+      setStatus(`Datei gespeichert unter: ${file.uri}`);
     }
   };
 
@@ -72,7 +73,7 @@ export default function SettingsScreen() {
   const exportCsv = async () => {
     const entries = await repos.entries.listAll();
     // BOM, damit Excel Umlaute korrekt erkennt
-    const csv = '﻿' + entriesToCsv(entries, dims.dimensions, dims.values, Date.now());
+    const csv = '\uFEFF' + entriesToCsv(entries, dims.dimensions, dims.values, Date.now());
     await shareFile(`zeiten-${stamp()}.csv`, csv, 'text/csv');
   };
 
@@ -87,9 +88,9 @@ export default function SettingsScreen() {
     try {
       const data = JSON.parse(await new File(result.assets[0].uri).text()) as BackupData;
       await mutate((r) => r.importBackup(data));
-      Alert.alert('Import abgeschlossen', `${data.entries.length} Einträge übernommen.`);
+      setStatus(`Import abgeschlossen: ${data.entries.length} Einträge übernommen.`);
     } catch (e) {
-      Alert.alert('Import fehlgeschlagen', e instanceof Error ? e.message : String(e));
+      setStatus(`Import fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -140,10 +141,23 @@ export default function SettingsScreen() {
 
       <SectionTitle>Daten</SectionTitle>
       <Card style={{ gap: spacing.md }}>
-        <Button title="Als CSV exportieren (Excel)" icon="document-text-outline" variant="secondary" onPress={exportCsv} />
-        <Button title="Backup exportieren (JSON)" icon="cloud-download-outline" variant="secondary" onPress={exportJson} />
-        <Button title="Backup importieren" icon="cloud-upload-outline" variant="secondary" onPress={importJson} />
-        <Text style={{ color: p.muted, fontSize: 12 }}>Alle Daten werden nur lokal auf diesem Gerät gespeichert.</Text>
+        {Platform.OS === 'web' ? (
+          <Text style={{ color: p.text }}>
+            Dies ist die Browser-Vorschau. Export und Backup gibt es in der Handy-App.
+          </Text>
+        ) : (
+          <>
+            <Button title="Als CSV exportieren (Excel)" icon="document-text-outline" variant="secondary" onPress={exportCsv} />
+            <Button title="Backup exportieren (JSON)" icon="cloud-download-outline" variant="secondary" onPress={exportJson} />
+            <Button title="Backup importieren" icon="cloud-upload-outline" variant="secondary" onPress={importJson} />
+          </>
+        )}
+        {status && <Text style={{ color: p.text }}>{status}</Text>}
+        <Text style={{ color: p.muted, fontSize: 12 }}>
+          {Platform.OS === 'web'
+            ? 'Alle Daten bleiben nur in diesem Browser gespeichert.'
+            : 'Alle Daten werden nur lokal auf diesem Gerät gespeichert.'}
+        </Text>
       </Card>
     </ScrollView>
   );

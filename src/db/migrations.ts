@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { DEFAULT_DIMENSIONS } from '../domain/defaults';
 import { newId } from './ids';
 
 /**
@@ -57,18 +58,8 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       );
     `);
 
-    // Standard-Merkmale. Person/Auftrag/Typ/Bezeichnung sind vorbereitet,
-    // aber deaktiviert – in den Einstellungen einschaltbar.
     const now = Date.now();
-    const defaults: [key: string, name: string, multi: boolean, enabled: boolean][] = [
-      ['project', 'Projekt', false, true],
-      ['tags', 'Tags', true, true],
-      ['person', 'Person', false, false],
-      ['order', 'Auftrag', false, false],
-      ['type', 'Typ', false, false],
-      ['label', 'Bezeichnung', false, false],
-    ];
-    for (const [i, [key, name, multi, enabled]] of defaults.entries()) {
+    for (const [i, { key, name, multi, enabled }] of DEFAULT_DIMENSIONS.entries()) {
       await db.runAsync(
         'INSERT INTO dimensions (id, key, name, multi, enabled, sort, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         newId(),

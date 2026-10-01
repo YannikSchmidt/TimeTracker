@@ -1,7 +1,5 @@
-import { useSQLiteContext } from 'expo-sqlite';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { createSqliteRepositories } from '../repositories/sqlite';
 import type { Repositories } from '../repositories/types';
 
 interface DataContextValue {
@@ -14,9 +12,8 @@ interface DataContextValue {
 
 const DataContext = createContext<DataContextValue | null>(null);
 
-export function DataProvider({ children }: { children: ReactNode }) {
-  const db = useSQLiteContext();
-  const repos = useMemo(() => createSqliteRepositories(db), [db]);
+/** Stellt die Repositories bereit (SQLite nativ, Speicher/localStorage im Browser – siehe StorageRoot). */
+export function DataProvider({ repos, children }: { repos: Repositories; children: ReactNode }) {
   const [version, setVersion] = useState(0);
 
   const mutate = useCallback(
