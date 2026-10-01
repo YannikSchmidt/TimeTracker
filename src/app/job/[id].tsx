@@ -129,7 +129,7 @@ export default function JobScreen() {
           </Text>
           {readOnly ? (
             <Text style={[styles.owner, { color: p.muted, backgroundColor: p.track }]}>
-              Auftrag von {job.createdBy ?? 'einer anderen Person'} – nur lesbar
+              Auftrag von {job.createdBy ? work.nameOf(job.createdBy) : 'einer anderen Person'} – nur lesbar
             </Text>
           ) : (
             <JobButtons job={job} actions={actions} onReopen={() => mutate((r) => r.jobs.reopen(job.id))} />

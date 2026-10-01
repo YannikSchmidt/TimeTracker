@@ -3,7 +3,7 @@ import { GitHubStore } from '../src/sync/github';
 import { RemoteError } from '../src/sync/remote';
 import { isNewer, shortVersion } from '../src/lib/version';
 
-const ctx = { login: 'anna', appVersion: 'abc', platform: 'iOS · Safari' };
+const ctx = { author: '@anna', appVersion: 'abc', platform: 'iOS · Safari' };
 const item = (text: string, extra: Partial<PendingFeedback> = {}): PendingFeedback => ({
   id: text,
   category: 'idea',
@@ -71,7 +71,7 @@ describe('GitHubStore Issues', () => {
     expect(created).toMatchObject({ number: 7, state: 'open', url: issue.html_url, comments: 2 });
     expect(calls[0].url).toBe('https://api.github.com/repos/o/r/issues');
     expect(JSON.parse(calls[0].init.body as string)).toEqual({ title: 'T', body: 'B', labels: ['vorschlag'] });
-    const list = await gh.listIssues('anna');
+    const list = await gh.listIssues({ creator: 'anna' });
     expect(list.map((i) => i.number)).toEqual([7]);
     expect(calls[1].url).toContain('labels=vorschlag');
     expect(calls[1].url).toContain('creator=anna');

@@ -24,6 +24,8 @@ export default function RootLayout() {
           <Stack.Screen name="rework-reason/[id]" options={{ presentation: 'modal', title: 'Nacharbeit beenden' }} />
           <Stack.Screen name="connect" options={{ presentation: 'modal', title: 'Team-Sync' }} />
           <Stack.Screen name="article/[id]" options={{ presentation: 'modal', title: 'Artikel' }} />
+          <Stack.Screen name="invite" options={{ presentation: 'modal', title: 'Kollegen einladen' }} />
+          <Stack.Screen name="join" options={{ title: 'Einladung' }} />
           <Stack.Screen name="feedback" options={{ presentation: 'modal', title: 'Verbesserung vorschlagen' }} />
         </Stack>
       </StorageRoot>

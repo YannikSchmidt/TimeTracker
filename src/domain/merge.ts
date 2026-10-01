@@ -112,6 +112,8 @@ export function merge3<T extends Versioned>(base: T[] | null, local: T[], remote
 export interface PersonData {
   version: 1;
   owner: string;
+  /** Anzeigename der Person (z.B. „Max Müller“) */
+  name?: string;
   jobs: Job[];
   entries: Entry[];
   settings: Settings;
@@ -127,11 +129,12 @@ export interface SharedData {
 }
 
 /** Lokalen Stand in eigene Datei und gemeinsame Datei aufteilen. */
-export function splitSnapshot(data: BackupData, owner: string): { person: PersonData; shared: SharedData } {
+export function splitSnapshot(data: BackupData, owner: string, name?: string): { person: PersonData; shared: SharedData } {
   return {
     person: {
       version: 1,
       owner,
+      ...(name ? { name } : {}),
       // Aufträge ohne Besitzer (vor dem Verbinden erfasst) gehören der angemeldeten Person
       jobs: data.jobs.map((j) => (j.createdBy ? j : { ...j, createdBy: owner })),
       entries: data.entries,
@@ -168,6 +171,7 @@ export function mergePerson(local: PersonData, remote: PersonData | null, now: M
   return {
     version: 1,
     owner: local.owner,
+    ...((local.name ?? remote.name) ? { name: local.name ?? remote.name } : {}),
     jobs: merged.jobs,
     entries: merged.entries,
     settings: remoteNewer ? remote.settings : local.settings,

@@ -132,12 +132,17 @@ export class GitHubStore implements RemoteStore, IssueTarget {
     return toFeedbackIssue(data as IssueResponse);
   }
 
-  /** Vorschläge (Label „vorschlag“), optional nur die einer Person; neueste zuerst. */
-  async listIssues(creator?: string): Promise<FeedbackIssue[]> {
+  /**
+   * Vorschläge (Label „vorschlag“), neueste zuerst. Filter: nach GitHub-Konto (creator)
+   * oder – bei gemeinsamem Team-Zugang – nach einem Text im Inhalt (bodyIncludes).
+   */
+  async listIssues({ creator, bodyIncludes }: { creator?: string; bodyIncludes?: string } = {}): Promise<FeedbackIssue[]> {
     const params = new URLSearchParams({ labels: FEEDBACK_LABEL, state: 'all', per_page: '50', ...(creator ? { creator } : {}) });
     const { status, data } = await this.request('GET', `/repos/${this.repo}/issues?${params}`);
     if (status !== 200) this.failIssues(status, data, 'Laden der Vorschläge');
-    return (data as IssueResponse[]).filter((i) => !i.pull_request).map(toFeedbackIssue);
+    return (data as IssueResponse[])
+      .filter((i) => !i.pull_request && (!bodyIncludes || (i.body ?? '').includes(bodyIncludes)))
+      .map(toFeedbackIssue);
   }
 }
 
@@ -148,6 +153,7 @@ interface IssueResponse {
   html_url: string;
   created_at: string;
   comments: number;
+  body?: string | null;
   pull_request?: unknown;
 }
 

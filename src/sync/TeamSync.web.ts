@@ -4,13 +4,14 @@ import { BASE_URL } from '../lib/baseUrl';
 import { APP_VERSION } from '../lib/version';
 import { idb } from '../data/idb.web';
 import { createMemoryStore, type MemoryStore } from '../repositories/memory';
-import { decryptJson, encryptJson } from './crypto';
-import { SyncEngine, type SyncBase, type SyncStatus, type TeamMember } from './engine';
-import { describePlatform, sendPending, type FeedbackCategory, type FeedbackIssue, type PendingFeedback } from './feedback';
+import { decryptJson, encryptJson, WrongPasswordError, type TeamMeta } from './crypto';
+import { PATHS, SyncEngine, type SyncBase, type SyncStatus, type TeamMember } from './engine';
+import { AUTHOR_PREFIX, describePlatform, sendPending, type FeedbackCategory, type FeedbackIssue, type PendingFeedback } from './feedback';
 import { GitHubStore } from './github';
 import { RemoteError } from './remote';
-import { prepareConnect } from './setup';
-import type { ConnectInput, ConnectResult, FeedbackResult } from './TeamContext';
+import { createInvite, decodeInvite, inviteUrl, openInvite, personId } from './invite';
+import { prepareConnect, prepareInviteConnect } from './setup';
+import type { ConnectInput, ConnectResult, CreateInviteResult, FeedbackResult, InviteConnectInput, InviteConnectResult } from './TeamContext';
 
 const KEYS = {
   snapshot: 'snapshot',
@@ -27,8 +28,11 @@ const POLL_INTERVAL = 60_000;
 /** Gespeicherte Verbindung – der Token liegt nur verschlüsselt vor. */
 interface SyncConfig {
   repo: string;
+  /** GitHub-Konto, dem der Token gehört */
   login: string;
   name: string | null;
+  /** Über eine Einladung verbunden: Person mit eigenem Namen statt GitHub-Konto */
+  person?: { id: string; name: string };
   /** verschlüsselt mit dem Team-Schlüssel */
   token: string;
 }
@@ -43,6 +47,8 @@ export interface TeamSyncState {
   others: TeamMember[];
   status: SyncStatus;
   pendingFeedback: number;
+  /** Über eine Einladung (gemeinsamer Team-Zugang) verbunden */
+  viaInvite: boolean;
 }
 
 /** Team-Sync nur in der eigenen Web-App (nicht in eingebetteten Vorschauen). */
@@ -77,6 +83,7 @@ export class TeamSync {
   private feedbackQueue: PendingFeedback[] = [];
   private sendingFeedback: Promise<void> | null = null;
   private login: string | null = null;
+  private teamKey: CryptoKey | null = null;
   private pushTimer: ReturnType<typeof setTimeout> | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private readonly stateListeners = new Set<() => void>();
@@ -108,6 +115,7 @@ export class TeamSync {
       others: [],
       status: { state: 'idle', lastSync: null, error: null },
       pendingFeedback: 0,
+      viaInvite: false,
     };
   }
 
@@ -183,13 +191,16 @@ export class TeamSync {
   private async startEngine(cfg: SyncConfig, key: CryptoKey, base: SyncBase | null) {
     const { token } = await decryptJson<{ token: string }>(key, cfg.token);
     this.stopEngine();
-    this.login = cfg.login;
+    const who = cfg.person ?? { id: cfg.login, name: cfg.name ?? cfg.login };
+    this.login = who.id;
     this.config = cfg;
+    this.teamKey = key;
     this.github = new GitHubStore(token, cfg.repo);
     this.engine = new SyncEngine({
       remote: this.github,
       key,
-      login: cfg.login,
+      login: who.id,
+      name: who.name,
       getLocal: () => this.store.snapshot(),
       applyLocal: (data) => {
         this.store.replace(data);
@@ -200,7 +211,7 @@ export class TeamSync {
       initialBase: base,
       saveBase: (b) => void idb.set(KEYS.base, b).catch(() => {}),
     });
-    this.setState({ connected: true, localOnly: false, login: cfg.login, name: cfg.name, repo: cfg.repo });
+    this.setState({ connected: true, localOnly: false, login: who.id, name: who.name, repo: cfg.repo, viaInvite: !!cfg.person });
     this.pollTimer = setInterval(this.syncNow, POLL_INTERVAL);
     document.addEventListener('visibilitychange', this.onVisible);
     window.addEventListener('online', this.onVisible);
@@ -223,7 +234,7 @@ export class TeamSync {
       typeof window !== 'undefined' &&
       (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true);
     return {
-      login: this.login ?? 'unbekannt',
+      author: this.config?.person ? `${this.config.person.name} (Team-Zugang)` : `@${this.login ?? 'unbekannt'}`,
       appVersion: APP_VERSION,
       platform: typeof navigator === 'undefined' ? 'unbekannt' : describePlatform(navigator.userAgent, !!standalone),
     };
@@ -272,8 +283,11 @@ export class TeamSync {
   };
 
   listFeedback = async (): Promise<FeedbackIssue[]> => {
-    if (!this.github || !this.login) return [];
-    return this.github.listIssues(this.login);
+    if (!this.github || !this.config) return [];
+    const { person, login } = this.config;
+    return person
+      ? this.github.listIssues({ bodyIncludes: `${AUTHOR_PREFIX}${person.name} (Team-Zugang)` })
+      : this.github.listIssues({ creator: login });
   };
 
   // --- Verbinden / Abmelden ---------------------------------------------------
@@ -289,22 +303,79 @@ export class TeamSync {
       name: result.user.name,
       token: await encryptJson(result.key, { token }),
     };
+    return this.saveAndStart(cfg, result.key);
+  };
+
+  private async saveAndStart(cfg: SyncConfig, key: CryptoKey): Promise<{ ok: true } | { ok: false; error: string }> {
     try {
-      await idb.set(KEYS.key, result.key);
+      await idb.set(KEYS.key, key);
       await idb.set(KEYS.sync, cfg);
       await idb.delete(KEYS.base);
       await idb.set(KEYS.localOnly, false);
     } catch {
       return { ok: false, error: 'Die Anmeldung konnte auf diesem Gerät nicht gespeichert werden (privates Fenster?).' };
     }
-    await this.startEngine(cfg, result.key, null);
+    await this.startEngine(cfg, key, null);
     return { ok: true };
+  }
+
+  /** Mit einer Einladung (QR-Code/Link) verbinden: Team-Passwort + eigener Name, kein GitHub-Konto nötig. */
+  connectWithInvite = async (input: InviteConnectInput): Promise<InviteConnectResult> => {
+    const invite = decodeInvite(input.invite);
+    if (!invite) return { ok: false, error: 'Das ist keine gültige Einladung.' };
+    const name = input.name.trim().replace(/\s+/g, ' ');
+    const id = personId(name);
+    if (!id) return { ok: false, error: 'Bitte deinen Namen eingeben.' };
+    let opened: Awaited<ReturnType<typeof openInvite>>;
+    try {
+      opened = await openInvite(invite, input.password);
+    } catch (e) {
+      if (e instanceof WrongPasswordError) return { ok: false, error: 'Das Team-Passwort ist falsch.' };
+      return { ok: false, error: `Die Einladung konnte nicht geöffnet werden: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    const result = await prepareInviteConnect(new GitHubStore(opened.token, opened.repo), opened.key, id, input.confirmName ?? false);
+    if (!result.ok) return result;
+    const cfg: SyncConfig = {
+      repo: opened.repo,
+      login: result.user.login,
+      name: result.user.name,
+      person: { id, name },
+      token: await encryptJson(opened.key, { token: opened.token }),
+    };
+    return this.saveAndStart(cfg, opened.key);
+  };
+
+  /**
+   * Einladung erstellen. Ohne Token wird der Zugang dieses Geräts geteilt;
+   * ein anderer Token (z.B. eines eigenen App-Kontos) wird vorher geprüft.
+   */
+  createInvite = async (otherToken?: string): Promise<CreateInviteResult> => {
+    const cfg = this.config;
+    const key = this.teamKey;
+    if (!cfg || !key || !this.github) return { ok: false, error: 'Dieses Gerät ist nicht mit dem Team verbunden.' };
+    try {
+      let token = otherToken?.trim();
+      if (token) {
+        const check = new GitHubStore(token, cfg.repo);
+        await check.whoAmI();
+        await check.checkAccess();
+      } else {
+        token = (await decryptJson<{ token: string }>(key, cfg.token)).token;
+      }
+      const metaFile = await this.github.read(PATHS.meta);
+      if (!metaFile) return { ok: false, error: 'Im Daten-Repo fehlt meta.json.' };
+      const payload = await createInvite(key, JSON.parse(metaFile.text) as TeamMeta, cfg.repo, token);
+      return { ok: true, url: inviteUrl(window.location.origin, payload) };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
   };
 
   disconnect = async () => {
     this.stopEngine();
     this.login = null;
     this.config = null;
+    this.teamKey = null;
     await Promise.all([idb.delete(KEYS.key), idb.delete(KEYS.sync), idb.delete(KEYS.base)]).catch(() => {});
     this.setState({
       connected: false,
@@ -313,6 +384,7 @@ export class TeamSync {
       repo: null,
       others: [],
       status: { state: 'idle', lastSync: null, error: null },
+      viaInvite: false,
     });
   };
 

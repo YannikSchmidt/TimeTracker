@@ -97,3 +97,12 @@ export async function unlockTeam(meta: TeamMeta, password: string): Promise<Cryp
   }
   throw new WrongPasswordError();
 }
+
+/** Passt ein (z.B. aus einer Einladung abgeleiteter) Schlüssel zum Team? */
+export async function checkTeamKey(meta: TeamMeta, key: CryptoKey): Promise<boolean> {
+  try {
+    return (await decryptText(key, meta.verifier)) === VERIFIER_TEXT;
+  } catch {
+    return false;
+  }
+}

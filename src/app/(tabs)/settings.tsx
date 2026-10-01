@@ -173,13 +173,14 @@ export default function SettingsScreen() {
             {team.connected ? (
               <>
                 <Text style={{ color: p.text }}>
-                  Verbunden als <Text style={{ fontWeight: '700' }}>{team.name ?? team.login}</Text> ({team.login}) mit{' '}
-                  {team.repo}
+                  Verbunden als <Text style={{ fontWeight: '700' }}>{team.name ?? team.login}</Text>
+                  {team.viaInvite ? ' (über Einladung)' : ` (${team.login})`} mit {team.repo}
                 </Text>
                 <SyncBadge />
                 {team.others.length > 0 && (
-                  <Text style={{ color: p.muted, fontSize: 12 }}>Im Team: {team.others.map((o) => o.login).join(', ')}</Text>
+                  <Text style={{ color: p.muted, fontSize: 12 }}>Im Team: {team.others.map((o) => o.name).join(', ')}</Text>
                 )}
+                <Button title="Kollegen einladen (QR-Code)" icon="qr-code-outline" onPress={() => router.push('/invite')} />
                 <Button title="Jetzt synchronisieren" icon="sync-outline" variant="secondary" onPress={team.syncNow} />
                 <Button
                   title={confirmLogout ? 'Wirklich abmelden?' : 'Dieses Gerät abmelden'}

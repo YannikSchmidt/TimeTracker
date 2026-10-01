@@ -99,7 +99,7 @@ export default function StatsScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <OwnerFilterBar others={work.others} value={owner} onChange={setOwner} />
+      <OwnerFilterBar others={work.others} nameOf={work.nameOf} value={owner} onChange={setOwner} />
       <Segmented options={PERIODS} value={kind} onChange={setKind} />
 
       <View style={styles.periodRow}>

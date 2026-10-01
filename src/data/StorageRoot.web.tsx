@@ -37,6 +37,8 @@ function SyncedData({ sync, children }: { sync: TeamSync; children: ReactNode })
       submitFeedback: sync.submitFeedback,
       listFeedback: sync.listFeedback,
       connect: sync.connect,
+      connectWithInvite: sync.connectWithInvite,
+      createInvite: sync.createInvite,
       disconnect: sync.disconnect,
       setLocalOnly: sync.setLocalOnly,
     }),
