@@ -34,6 +34,8 @@ function SyncedData({ sync, children }: { sync: TeamSync; children: ReactNode })
     () => ({
       ...state,
       syncNow: sync.syncNow,
+      submitFeedback: sync.submitFeedback,
+      listFeedback: sync.listFeedback,
       connect: sync.connect,
       disconnect: sync.disconnect,
       setLocalOnly: sync.setLocalOnly,

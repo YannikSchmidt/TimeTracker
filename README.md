@@ -32,6 +32,8 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
 - **Team-Sync** (Web-App): verschlüsselt (AES-256, Team-Passwort) über ein privates GitHub-Repo; persönlicher Token
   pro Person, damit jede Änderung nachvollziehbar ist. Alle sehen alles (Filter *Ich / Person / Alle*),
   bearbeiten aber nur ihre eigenen Aufträge. Offline nutzbar, Abgleich automatisch.
+- **Verbesserungsvorschläge** aus der App → Issues im privaten Daten-Repo (offline vorgemerkt).
+- **Automatische Updates**: keine Neuinstallation; die App lädt neue Versionen selbst (im Hintergrund oder per Hinweis).
 - **Scanner**: Live-Kamera (App und Web-App), alternativ per Foto.
 - **Einstellungen**: Sollstunden, Arbeitstage, Standard-Stückzahl, Merkmale, Team-Sync, CSV-Export pro Auftrag, JSON-Backup.
 

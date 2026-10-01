@@ -17,8 +17,10 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+  // Seite und version.json immer beim Server nachfragen (kein veralteter HTTP-Cache) → Updates kommen sofort an
+  const fresh = req.mode === 'navigate' || url.pathname.endsWith('/version.json');
   event.respondWith(
-    fetch(req)
+    fetch(fresh ? new Request(req, { cache: 'no-cache' }) : req)
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();

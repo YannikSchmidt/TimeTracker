@@ -10,6 +10,8 @@ import { jobsToCsv } from '../../domain/export';
 import type { Dimension } from '../../domain/types';
 import { useDimensions, type DimensionsData } from '../../hooks/useDimensions';
 import { pickTextFile, shareTextFile } from '../../lib/files';
+import { useAppUpdate } from '../../lib/updates';
+import { APP_VERSION, shortVersion } from '../../lib/version';
 import type { BackupData } from '../../repositories/types';
 import { useTeam } from '../../sync/TeamContext';
 import { radius, spacing, usePalette, VALUE_COLORS } from '../../theme';
@@ -27,6 +29,7 @@ export default function SettingsScreen() {
   const [status, setStatus] = useState<string | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const team = useTeam();
+  const update = useAppUpdate();
 
   const [hoursFor, setHoursFor] = useState<number | null>(null);
   if (settings && settings.weeklyTargetHours !== hoursFor) {
@@ -206,6 +209,15 @@ export default function SettingsScreen() {
         </>
       )}
 
+      <SectionTitle>Feedback</SectionTitle>
+      <Card style={{ gap: spacing.md }}>
+        <Text style={{ color: p.muted }}>Ideen, Fehler oder Wünsche? Vorschläge landen im Team-Repo und werden dort bearbeitet.</Text>
+        <Button title="Verbesserung vorschlagen" icon="bulb-outline" variant="secondary" onPress={() => router.push('/feedback')} />
+        {team.pendingFeedback > 0 && (
+          <Text style={{ color: p.muted, fontSize: 12 }}>{team.pendingFeedback} Vorschlag/Vorschläge warten auf das Senden.</Text>
+        )}
+      </Card>
+
       <SectionTitle>Daten</SectionTitle>
       <Card style={{ gap: spacing.md }}>
         <Button title="Als CSV exportieren (Excel)" icon="document-text-outline" variant="secondary" onPress={exportCsv} />
@@ -219,6 +231,34 @@ export default function SettingsScreen() {
               ? 'Alle Daten bleiben nur in diesem Browser gespeichert.'
               : 'Alle Daten werden nur lokal auf diesem Gerät gespeichert.'}
         </Text>
+      </Card>
+
+      <SectionTitle>App</SectionTitle>
+      <Card style={{ gap: spacing.sm }}>
+        <Text style={{ color: p.text }}>
+          Version <Text style={{ fontWeight: '700' }}>{shortVersion(APP_VERSION)}</Text>
+        </Text>
+        {update.supported ? (
+          <>
+            <Text style={{ color: p.muted, fontSize: 12 }}>
+              Updates kommen automatisch: Die App lädt eine neue Version, sobald sie im Hintergrund ist. Neu installieren ist nie nötig.
+            </Text>
+            {update.available ? (
+              <Button title="Neue Version laden" icon="sparkles-outline" onPress={update.apply} />
+            ) : (
+              <Button
+                title={update.checking ? 'Prüfe …' : 'Nach Updates suchen'}
+                icon="refresh"
+                variant="secondary"
+                onPress={() => void update.check()}
+                disabled={update.checking}
+              />
+            )}
+            {update.lastCheck && !update.available && !update.checking && (
+              <Text style={{ color: p.muted, fontSize: 12 }}>Aktuell – zuletzt geprüft {format(update.lastCheck, 'HH:mm')} Uhr.</Text>
+            )}
+          </>
+        ) : null}
       </Card>
     </ScrollView>
   );

@@ -1,4 +1,5 @@
 import { fromBase64, toBase64 } from './crypto';
+import { FEEDBACK_LABEL, type FeedbackIssue, type IssueDraft, type IssueTarget } from './feedback';
 import { ConflictError, RemoteError, type RemoteEntry, type RemoteFile, type RemoteStore, type RemoteUser } from './remote';
 
 const API = 'https://api.github.com';
@@ -18,7 +19,7 @@ interface ContentResponse {
  * Jeder Schreibvorgang ist ein Commit des Token-Besitzers → nachvollziehbar, wer was geändert hat.
  * Lesezugriffe nutzen ETags (304 zählt nicht gegen das Rate-Limit).
  */
-export class GitHubStore implements RemoteStore {
+export class GitHubStore implements RemoteStore, IssueTarget {
   private readonly etags = new Map<string, { etag: string; body: unknown }>();
 
   constructor(
@@ -108,4 +109,53 @@ export class GitHubStore implements RemoteStore {
     if (status !== 200) this.fail(status, data, `Lesen von ${dir}`);
     return (data as ContentResponse[]).filter((f) => f.type === 'file').map((f) => ({ name: f.name, path: f.path, sha: f.sha }));
   }
+
+  // --- Verbesserungsvorschläge (Issues) ---------------------------------------
+
+  private failIssues(status: number, data: unknown, what: string): never {
+    if (status === 403 || status === 404 || status === 410) {
+      const message = (data as { message?: string } | null)?.message ?? '';
+      if (!/rate limit/i.test(message))
+        throw new RemoteError(
+          status === 410
+            ? `Im Repo ${this.repo} sind Issues ausgeschaltet.`
+            : 'Der Token darf keine Vorschläge anlegen. Bitte beim Token die Berechtigung „Issues: Read and write“ ergänzen.',
+          status,
+        );
+    }
+    this.fail(status, data, what);
+  }
+
+  async createIssue(draft: IssueDraft): Promise<FeedbackIssue> {
+    const { status, data } = await this.request('POST', `/repos/${this.repo}/issues`, draft);
+    if (status !== 201) this.failIssues(status, data, 'Senden des Vorschlags');
+    return toFeedbackIssue(data as IssueResponse);
+  }
+
+  /** Vorschläge (Label „vorschlag“), optional nur die einer Person; neueste zuerst. */
+  async listIssues(creator?: string): Promise<FeedbackIssue[]> {
+    const params = new URLSearchParams({ labels: FEEDBACK_LABEL, state: 'all', per_page: '50', ...(creator ? { creator } : {}) });
+    const { status, data } = await this.request('GET', `/repos/${this.repo}/issues?${params}`);
+    if (status !== 200) this.failIssues(status, data, 'Laden der Vorschläge');
+    return (data as IssueResponse[]).filter((i) => !i.pull_request).map(toFeedbackIssue);
+  }
 }
+
+interface IssueResponse {
+  number: number;
+  title: string;
+  state: 'open' | 'closed';
+  html_url: string;
+  created_at: string;
+  comments: number;
+  pull_request?: unknown;
+}
+
+const toFeedbackIssue = (i: IssueResponse): FeedbackIssue => ({
+  number: i.number,
+  title: i.title,
+  state: i.state,
+  url: i.html_url,
+  createdAt: Date.parse(i.created_at),
+  comments: i.comments ?? 0,
+});

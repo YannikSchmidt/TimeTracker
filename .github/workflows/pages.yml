@@ -32,6 +32,9 @@ jobs:
         run: npx expo export --platform web
         env:
           CI: '1'
+          EXPO_PUBLIC_APP_VERSION: ${{ github.sha }}
+      # Versionsdatei für die automatische Update-Prüfung der App
+      - run: echo "{\"version\":\"${{ github.sha }}\",\"builtAt\":\"$(date -u +%FT%TZ)\"}" > dist/version.json
       # Direktaufrufe von Unterseiten (z.B. /TimeTracker/job/123) auf die App umleiten
       - run: cp dist/index.html dist/404.html
       - uses: actions/configure-pages@v5

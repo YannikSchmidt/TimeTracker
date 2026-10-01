@@ -6,8 +6,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { JobCard } from '../../components/JobCard';
 import { JobRow } from '../../components/JobRow';
 import { SyncBadge, SyncSetupHint } from '../../components/SyncBadge';
+import { UpdateBanner } from '../../components/UpdateBanner';
 import { Empty, SectionTitle } from '../../components/ui';
-import { reworkOf } from '../../domain/jobs';
+import { jobName, reworkOf } from '../../domain/jobs';
 import { totalMs } from '../../domain/stats';
 import { formatDuration } from '../../domain/time';
 import { useArticles } from '../../hooks/useArticles';
@@ -48,6 +49,7 @@ export default function TimerScreen() {
         </View>
       </Pressable>
 
+      <UpdateBanner />
       <SyncSetupHint />
       <SyncBadge />
       <Text style={{ color: p.muted, textAlign: 'center' }}>
@@ -87,7 +89,7 @@ export default function TimerScreen() {
               right={
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Nacharbeit zu Auftrag ${job.orderNo ?? ''} starten`}
+                  accessibilityLabel={`Nacharbeit zu ${jobName(job, job.articleId ? articles.byId.get(job.articleId) : null)} starten`}
                   hitSlop={8}
                   onPress={() => void actions.startRework(job)}
                   style={[styles.reworkButton, { borderColor: p.warning }]}
@@ -99,6 +101,15 @@ export default function TimerScreen() {
           ))}
         </View>
       )}
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/feedback')}
+        style={styles.feedbackLink}
+      >
+        <Ionicons name="bulb-outline" size={16} color={p.muted} />
+        <Text style={{ color: p.muted }}>Verbesserung vorschlagen</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -113,5 +124,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
   },
   newTitle: { fontSize: 22, fontWeight: '800' },
+  feedbackLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: spacing.sm },
   reworkButton: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
 });

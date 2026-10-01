@@ -1,13 +1,16 @@
 import { newId } from '../db/ids';
 import type { BackupData } from '../domain/legacy';
 import { BASE_URL } from '../lib/baseUrl';
+import { APP_VERSION } from '../lib/version';
 import { idb } from '../data/idb.web';
 import { createMemoryStore, type MemoryStore } from '../repositories/memory';
 import { decryptJson, encryptJson } from './crypto';
 import { SyncEngine, type SyncBase, type SyncStatus, type TeamMember } from './engine';
+import { describePlatform, sendPending, type FeedbackCategory, type FeedbackIssue, type PendingFeedback } from './feedback';
 import { GitHubStore } from './github';
+import { RemoteError } from './remote';
 import { prepareConnect } from './setup';
-import type { ConnectInput, ConnectResult } from './TeamContext';
+import type { ConnectInput, ConnectResult, FeedbackResult } from './TeamContext';
 
 const KEYS = {
   snapshot: 'snapshot',
@@ -15,6 +18,7 @@ const KEYS = {
   key: 'sync-key',
   base: 'sync-base',
   localOnly: 'local-only',
+  feedback: 'feedback-queue',
 };
 const LEGACY_LOCAL_STORAGE = 'timetracker:v1';
 const PUSH_DELAY = 3_000;
@@ -38,6 +42,7 @@ export interface TeamSyncState {
   repo: string | null;
   others: TeamMember[];
   status: SyncStatus;
+  pendingFeedback: number;
 }
 
 /** Team-Sync nur in der eigenen Web-App (nicht in eingebetteten Vorschauen). */
@@ -68,6 +73,9 @@ export class TeamSync {
   readonly store: MemoryStore;
   private state: TeamSyncState;
   private engine: SyncEngine | null = null;
+  private github: GitHubStore | null = null;
+  private feedbackQueue: PendingFeedback[] = [];
+  private sendingFeedback: Promise<void> | null = null;
   private login: string | null = null;
   private pushTimer: ReturnType<typeof setTimeout> | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -99,6 +107,7 @@ export class TeamSync {
       repo: null,
       others: [],
       status: { state: 'idle', lastSync: null, error: null },
+      pendingFeedback: 0,
     };
   }
 
@@ -121,6 +130,8 @@ export class TeamSync {
       (await safe(idb.get<SyncBase>(KEYS.base), undefined)) ?? null,
       (await safe(idb.get<boolean>(KEYS.localOnly), undefined)) ?? false,
     );
+    sync.feedbackQueue = (await safe(idb.get<PendingFeedback[]>(KEYS.feedback), undefined)) ?? [];
+    sync.setState({ pendingFeedback: sync.feedbackQueue.length });
     if (sync.state.available && sync.config && sync.key) {
       await sync.startEngine(sync.config, sync.key, sync.base).catch(() =>
         sync.setState({ status: { state: 'error', lastSync: null, error: 'Gespeicherte Anmeldung ist ungültig – bitte neu verbinden.' } }),
@@ -162,6 +173,7 @@ export class TeamSync {
 
   syncNow = () => {
     void this.engine?.sync();
+    void this.flushFeedback();
   };
 
   private onVisible = () => {
@@ -173,8 +185,9 @@ export class TeamSync {
     this.stopEngine();
     this.login = cfg.login;
     this.config = cfg;
+    this.github = new GitHubStore(token, cfg.repo);
     this.engine = new SyncEngine({
-      remote: new GitHubStore(token, cfg.repo),
+      remote: this.github,
       key,
       login: cfg.login,
       getLocal: () => this.store.snapshot(),
@@ -196,11 +209,72 @@ export class TeamSync {
 
   private stopEngine() {
     this.engine = null;
+    this.github = null;
     if (this.pushTimer) clearTimeout(this.pushTimer);
     if (this.pollTimer) clearInterval(this.pollTimer);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.onVisible);
     if (typeof window !== 'undefined') window.removeEventListener('online', this.onVisible);
   }
+
+  // --- Verbesserungsvorschläge --------------------------------------------------
+
+  private feedbackContext() {
+    const standalone =
+      typeof window !== 'undefined' &&
+      (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true);
+    return {
+      login: this.login ?? 'unbekannt',
+      appVersion: APP_VERSION,
+      platform: typeof navigator === 'undefined' ? 'unbekannt' : describePlatform(navigator.userAgent, !!standalone),
+    };
+  }
+
+  private setFeedbackQueue(queue: PendingFeedback[]) {
+    this.feedbackQueue = queue;
+    this.setState({ pendingFeedback: queue.length });
+    void idb.set(KEYS.feedback, queue).catch(() => {});
+  }
+
+  /** Vorgemerkte Vorschläge senden (nacheinander, nie parallel). */
+  private flushFeedback(): Promise<void> {
+    if (!this.github || this.feedbackQueue.length === 0) return Promise.resolve();
+    if (!this.sendingFeedback) {
+      const batch = this.feedbackQueue;
+      this.sendingFeedback = sendPending(batch, this.github, this.feedbackContext())
+        .then(({ sent }) => {
+          const sentIds = new Set(batch.slice(0, sent.length).map((f) => f.id));
+          // während des Sendens neu vorgemerkte Vorschläge bleiben erhalten
+          if (sentIds.size) this.setFeedbackQueue(this.feedbackQueue.filter((f) => !sentIds.has(f.id)));
+        })
+        .finally(() => {
+          this.sendingFeedback = null;
+        });
+    }
+    return this.sendingFeedback;
+  }
+
+  submitFeedback = async (input: { category: FeedbackCategory; text: string }): Promise<FeedbackResult> => {
+    const text = input.text.trim();
+    if (!text) return { ok: false, error: 'Bitte einen Text eingeben.' };
+    const item: PendingFeedback = { id: newId(), category: input.category, text, createdAt: Date.now() };
+    const github = this.github;
+    if (!github) {
+      this.setFeedbackQueue([...this.feedbackQueue, item]);
+      return { ok: true, queued: true, reason: 'Wird gesendet, sobald das Gerät mit dem Team verbunden ist.' };
+    }
+    const result = await sendPending([item], github, this.feedbackContext());
+    if (result.sent.length) return { ok: true, issue: result.sent[0] };
+    const error = result.error!;
+    // Berechtigung fehlt → nicht vormerken, sondern direkt melden
+    if (error instanceof RemoteError && error.status && error.status < 500) return { ok: false, error: error.message };
+    this.setFeedbackQueue([...this.feedbackQueue, item]);
+    return { ok: true, queued: true, reason: 'Keine Verbindung – wird automatisch nachgesendet.' };
+  };
+
+  listFeedback = async (): Promise<FeedbackIssue[]> => {
+    if (!this.github || !this.login) return [];
+    return this.github.listIssues(this.login);
+  };
 
   // --- Verbinden / Abmelden ---------------------------------------------------
 
