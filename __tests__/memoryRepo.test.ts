@@ -21,7 +21,6 @@ it('legt Standard-Merkmale an', async () => {
     ['project', true],
     ['tags', true],
     ['person', false],
-    ['order', false],
     ['type', false],
     ['label', false],
   ]);
@@ -43,11 +42,11 @@ it('Start stoppt laufenden Timer, Stop setzt Ende, Persistenz wird aufgerufen', 
 
 it('listInRange, Validierung und Soft-Delete', async () => {
   const { repos } = setup();
-  const e = await repos.entries.create({ startAt: 100, endAt: 200, note: '', valueIds: ['x', 'x'] });
+  const e = await repos.entries.create({ startAt: 100, endAt: 200, note: '', valueIds: ['x', 'x'], articleId: null, orderNo: null, quantity: null });
   expect(e.valueIds).toEqual(['x']);
   expect(await repos.entries.listInRange(150, 300)).toHaveLength(1);
   expect(await repos.entries.listInRange(200, 300)).toHaveLength(0);
-  await expect(repos.entries.create({ startAt: 200, endAt: 100, note: '', valueIds: [] })).rejects.toThrow();
+  await expect(repos.entries.create({ startAt: 200, endAt: 100, note: '', valueIds: [], articleId: null, orderNo: null, quantity: null })).rejects.toThrow();
   await expect(repos.entries.update(e.id, { endAt: 50 })).rejects.toThrow();
   await repos.entries.remove(e.id);
   expect(await repos.entries.listAll()).toHaveLength(0);
@@ -59,7 +58,7 @@ it('Werte, Einstellungen und Wiederherstellung aus gespeichertem Stand', async (
   const v = await first.repos.dimensions.createValue({ dimensionId: project.id, name: 'Kunde', color: '#f00' });
   await first.repos.dimensions.updateValue(v.id, { archived: true });
   await first.repos.settings.set({ weeklyTargetHours: 30 });
-  await first.repos.entries.create({ startAt: 0, endAt: 10, note: 'n', valueIds: [v.id] });
+  await first.repos.entries.create({ startAt: 0, endAt: 10, note: 'n', valueIds: [v.id], articleId: null, orderNo: null, quantity: null });
 
   const second = setup(first.saved.at(-1));
   expect((await second.repos.dimensions.listValues())[0]).toMatchObject({ name: 'Kunde', archived: true });
@@ -71,14 +70,14 @@ it('Backup-Import ordnet Standard-Merkmale per key zu', async () => {
   const source = setup();
   const [project] = await source.repos.dimensions.listDimensions();
   const v = await source.repos.dimensions.createValue({ dimensionId: project.id, name: 'P', color: '#000' });
-  await source.repos.entries.create({ startAt: 0, endAt: 10, note: '', valueIds: [v.id] });
+  await source.repos.entries.create({ startAt: 0, endAt: 10, note: '', valueIds: [v.id], articleId: null, orderNo: null, quantity: null });
   const backup = await source.repos.exportBackup();
 
   let n = 0;
   const target = createMemoryRepositories({ makeId: () => `other${++n}` });
   await target.importBackup(backup);
   const dims = await target.dimensions.listDimensions();
-  expect(dims).toHaveLength(6);
+  expect(dims).toHaveLength(5);
   const [value] = await target.dimensions.listValues();
   expect(value.dimensionId).toBe(dims[0].id);
   expect(await target.entries.listAll()).toHaveLength(1);

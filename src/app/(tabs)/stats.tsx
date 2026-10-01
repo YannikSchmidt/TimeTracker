@@ -2,11 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { BarChart, DonutChart, ShareList } from '../../components/charts';
+import { BarChart, DonutChart, ShareList, type ShareDatum } from '../../components/charts';
 import { Card, Chip, Empty, Expandable, Segmented } from '../../components/ui';
 import { useQuery } from '../../data/DataProvider';
 import {
+  articleProduction,
   bucketTotals,
+  NONE_COLOR,
+  totalsByKey,
   computeKpis,
   currentStreak,
   defaultBucketUnit,
@@ -21,9 +24,10 @@ import {
 } from '../../domain/stats';
 import { formatDuration } from '../../domain/time';
 import { DEFAULT_SETTINGS } from '../../domain/types';
+import { articleLabel, useArticles } from '../../hooks/useArticles';
 import { useDimensions } from '../../hooks/useDimensions';
 import { useNow } from '../../hooks/useNow';
-import { spacing, usePalette } from '../../theme';
+import { spacing, usePalette, VALUE_COLORS } from '../../theme';
 
 const PERIODS: { value: PeriodKind; label: string }[] = [
   { value: 'week', label: 'Woche' },
@@ -46,9 +50,11 @@ export default function StatsScreen() {
   const p = usePalette();
   const now = useNow(60_000);
   const dims = useDimensions();
+  const articles = useArticles();
   const [kind, setKind] = useState<PeriodKind>('week');
   const [anchor, setAnchor] = useState(() => Date.now());
-  const [dimensionId, setDimensionId] = useState<string | null>(null);
+  /** Gruppierung der Verteilung: Artikel, Auftrag oder ein Merkmal (dessen ID) */
+  const [group, setGroup] = useState<string>('article');
 
   const { data } = useQuery(async (r) => ({
     entries: await r.entries.listAll(),
@@ -59,7 +65,7 @@ export default function StatsScreen() {
 
   const range = useMemo(() => periodRange(kind, anchor), [kind, anchor]);
   const isCurrent = range.start <= now && now < range.end;
-  const dimension = dims.enabled.find((d) => d.id === dimensionId) ?? dims.enabled[0];
+  const dimension = dims.enabled.find((d) => d.id === group);
 
   const stats = useMemo(() => {
     const unit = defaultBucketUnit(kind);
@@ -76,9 +82,16 @@ export default function StatsScreen() {
       streak: currentStreak(entries, now),
       hours: hourProfile(entries, range, now),
       weekdays: weekdayTotals(entries, range, now),
-      shares: dimension ? totalsByDimension(entries, range, dimension, dims.values, now) : [],
+      shares: dimension
+        ? totalsByDimension(entries, range, dimension, dims.values, now).map((s) => ({ ...s, key: s.valueId ?? 'none' }))
+        : keyShares(
+            totalsByKey(entries, range, (e) => (group === 'order' ? e.orderNo : e.articleId), now),
+            (key) => (group === 'order' ? `Auftrag ${key}` : articles.byId.get(key) ? articleLabel(articles.byId.get(key)!) : 'Gelöschter Artikel'),
+            group === 'order' ? 'Ohne Auftrag' : 'Ohne Artikel',
+          ),
+      production: articleProduction(entries, range, now),
     };
-  }, [entries, settings, range, kind, now, dimension, dims.values]);
+  }, [entries, settings, range, kind, now, dimension, dims.values, group, articles.byId]);
 
   const { kpis } = stats;
   const balancePositive = kpis.balanceMs >= 0;
@@ -118,25 +131,65 @@ export default function StatsScreen() {
       </Card>
 
       {/* Details: aufklappbar, damit die Übersicht schlank bleibt */}
-      <Expandable title="Verteilung nach Merkmal" icon="pie-chart-outline" initiallyOpen>
-        {dims.enabled.length > 1 && (
-          <View style={styles.chips}>
-            {dims.enabled.map((d) => (
-              <Chip key={d.id} label={d.name} selected={d.id === dimension?.id} onPress={() => setDimensionId(d.id)} />
-            ))}
-          </View>
-        )}
+      <Expandable title="Verteilung" icon="pie-chart-outline" initiallyOpen>
+        <View style={styles.chips}>
+          <Chip label="Artikel" selected={group === 'article'} onPress={() => setGroup('article')} />
+          <Chip label="Auftrag" selected={group === 'order'} onPress={() => setGroup('order')} />
+          {dims.enabled.map((d) => (
+            <Chip key={d.id} label={d.name} selected={d.id === group} onPress={() => setGroup(d.id)} />
+          ))}
+        </View>
         {kpis.totalMs === 0 ? (
           <Empty text="Keine Zeit in diesem Zeitraum." />
         ) : (
           <View style={{ gap: spacing.lg }}>
-            <DonutChart data={stats.shares.map((s) => ({ ...s, key: s.valueId ?? 'none' }))} />
-            <ShareList data={stats.shares.map((s) => ({ ...s, key: s.valueId ?? 'none' }))} total={kpis.totalMs} />
+            <DonutChart data={stats.shares} />
+            <ShareList data={stats.shares} total={kpis.totalMs} />
             {dimension?.multi && (
               <Text style={{ color: p.muted, fontSize: 12 }}>
                 Hinweis: Einträge mit mehreren {dimension.name} zählen bei jedem davon.
               </Text>
             )}
+          </View>
+        )}
+      </Expandable>
+
+      <Expandable title="Artikel & Stückzahlen" icon="cube-outline">
+        {stats.production.length === 0 ? (
+          <Empty text="Keine Einträge mit Artikel in diesem Zeitraum." />
+        ) : (
+          <View>
+            <View style={[styles.tableRow, { borderBottomColor: p.border }]}>
+              <Text style={[styles.colName, styles.th, { color: p.muted }]}>Artikel</Text>
+              <Text style={[styles.colNum, styles.th, { color: p.muted }]}>Zeit</Text>
+              <Text style={[styles.colNum, styles.th, { color: p.muted }]}>Stück</Text>
+              <Text style={[styles.colNum, styles.th, { color: p.muted }]}>Min/Stk</Text>
+            </View>
+            {stats.production.map((row) => {
+              const a = articles.byId.get(row.articleId);
+              return (
+                <View key={row.articleId} style={[styles.tableRow, { borderBottomColor: p.border }]}>
+                  <View style={styles.colName}>
+                    <Text style={{ color: p.text, fontWeight: '600' }} numberOfLines={1}>
+                      {a?.number ?? 'Gelöscht'}
+                    </Text>
+                    {a?.name ? (
+                      <Text style={{ color: p.muted, fontSize: 12 }} numberOfLines={1}>
+                        {a.name}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={[styles.colNum, { color: p.text }]}>{formatDuration(row.ms)}</Text>
+                  <Text style={[styles.colNum, { color: p.text }]}>{row.pieces || '–'}</Text>
+                  <Text style={[styles.colNum, { color: p.text }]}>
+                    {row.msPerPiece == null ? '–' : (row.msPerPiece / 60_000).toLocaleString('de-DE', { maximumFractionDigits: 1 })}
+                  </Text>
+                </View>
+              );
+            })}
+            <Text style={{ color: p.muted, fontSize: 12, marginTop: spacing.sm }}>
+              Min/Stk: Dauer der Einträge mit Stückzahl geteilt durch ihre Stückzahl.
+            </Text>
           </View>
         )}
       </Expandable>
@@ -163,6 +216,24 @@ export default function StatsScreen() {
       </Expandable>
     </ScrollView>
   );
+}
+
+const MAX_SHARES = 8;
+
+/** Gruppen-Summen → Diagrammdaten; ab dem 9. Eintrag als „Weitere“ zusammengefasst. */
+function keyShares(totals: { key: string | null; ms: number }[], nameOf: (key: string) => string, noneName: string): ShareDatum[] {
+  const named = totals.filter((t) => t.key !== null);
+  const none = totals.find((t) => t.key === null);
+  const shown: ShareDatum[] = named.slice(0, MAX_SHARES).map((t, i) => ({
+    key: t.key!,
+    name: nameOf(t.key!),
+    color: VALUE_COLORS[i % VALUE_COLORS.length],
+    ms: t.ms,
+  }));
+  const restMs = named.slice(MAX_SHARES).reduce((s, t) => s + t.ms, 0);
+  if (restMs > 0) shown.push({ key: 'rest', name: `Weitere (${named.length - MAX_SHARES})`, color: '#6B7280', ms: restMs });
+  if (none) shown.push({ key: 'none', name: noneName, color: NONE_COLOR, ms: none.ms });
+  return shown;
 }
 
 function Kpi({ label, value, hint, color }: { label: string; value: string; hint?: string; color?: string }) {
@@ -195,6 +266,16 @@ const styles = StyleSheet.create({
   kpi: { flexBasis: '47%', flexGrow: 1, gap: 2, padding: spacing.md },
   kpiValue: { fontSize: 22, fontWeight: '700', fontVariant: ['tabular-nums'] },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  th: { fontSize: 12, fontWeight: '600' },
+  colName: { flex: 1, minWidth: 0 },
+  colNum: { width: 62, textAlign: 'right', fontVariant: ['tabular-nums'] },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',

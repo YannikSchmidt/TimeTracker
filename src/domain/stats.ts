@@ -282,3 +282,65 @@ export function weekdayTotals(entries: Entry[], range: Range, now: Millis): Mill
   }
   return totals;
 }
+
+// ---------------------------------------------------------------------------
+// Artikel & Aufträge
+// ---------------------------------------------------------------------------
+
+export interface KeyTotal {
+  key: string | null;
+  ms: Millis;
+}
+
+/** Zeit gruppiert nach einem beliebigen Schlüssel (z.B. Auftragsnummer), absteigend sortiert. */
+export function totalsByKey(
+  entries: Entry[],
+  range: Range,
+  keyOf: (entry: Entry) => string | null,
+  now: Millis,
+): KeyTotal[] {
+  const totals = new Map<string | null, Millis>();
+  for (const c of clipEntries(entries, range, now)) {
+    const key = keyOf(c.entry);
+    totals.set(key, (totals.get(key) ?? 0) + (c.end - c.start));
+  }
+  return [...totals.entries()].map(([key, ms]) => ({ key, ms })).sort((a, b) => b.ms - a.ms);
+}
+
+export interface ArticleProduction {
+  articleId: string;
+  ms: Millis;
+  /** Summe der Stückzahlen von Einträgen, die im Zeitraum begonnen haben */
+  pieces: number;
+  /** Zeit pro Stück, nur aus Einträgen mit Stückzahl > 0 */
+  msPerPiece: Millis | null;
+  entryCount: number;
+}
+
+/**
+ * Zeit und Stück je Artikel. Die Zeit wird auf den Zeitraum zugeschnitten,
+ * Stück zählen zum Startzeitpunkt des Eintrags.
+ */
+export function articleProduction(entries: Entry[], range: Range, now: Millis): ArticleProduction[] {
+  const rows = new Map<string, ArticleProduction & { msWithPieces: Millis }>();
+  for (const c of clipEntries(entries, range, now)) {
+    const id = c.entry.articleId;
+    if (!id) continue;
+    const row = rows.get(id) ?? { articleId: id, ms: 0, pieces: 0, msPerPiece: null, entryCount: 0, msWithPieces: 0 };
+    row.ms += c.end - c.start;
+    row.entryCount++;
+    const startsInRange = c.entry.startAt >= range.start && c.entry.startAt < range.end;
+    if (startsInRange && c.entry.quantity) {
+      row.pieces += c.entry.quantity;
+      row.msWithPieces += entryDurationFull(c.entry, now);
+    }
+    rows.set(id, row);
+  }
+  return [...rows.values()]
+    .map(({ msWithPieces, ...row }) => ({ ...row, msPerPiece: row.pieces > 0 ? msWithPieces / row.pieces : null }))
+    .sort((a, b) => b.ms - a.ms);
+}
+
+function entryDurationFull(entry: Entry, now: Millis): Millis {
+  return Math.max(0, effectiveEnd(entry, now) - entry.startAt);
+}

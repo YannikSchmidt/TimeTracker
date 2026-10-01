@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { DEFAULT_DIMENSIONS } from '../domain/defaults';
+import { DEFAULT_DIMENSIONS, OBSOLETE_DIMENSION_KEYS } from '../domain/defaults';
 import { newId } from './ids';
 
 /**
@@ -70,6 +70,39 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
         i,
         now,
         now,
+      );
+    }
+  },
+
+  // v2: Artikel, Auftragsnummer und Stückzahl am Eintrag
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE articles (
+        id TEXT PRIMARY KEY NOT NULL,
+        number TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        deleted_at INTEGER
+      );
+      CREATE INDEX idx_articles_number ON articles(number);
+
+      ALTER TABLE entries ADD COLUMN article_id TEXT REFERENCES articles(id);
+      ALTER TABLE entries ADD COLUMN order_no TEXT;
+      ALTER TABLE entries ADD COLUMN quantity INTEGER;
+      CREATE INDEX idx_entries_article ON entries(article_id);
+    `);
+    // Das vorbereitete Merkmal „Auftrag“ ist jetzt ein eigenes Feld – entfernen, solange unbenutzt.
+    const now = Date.now();
+    for (const key of OBSOLETE_DIMENSION_KEYS) {
+      await db.runAsync(
+        `UPDATE dimensions SET deleted_at = ?, updated_at = ?
+         WHERE key = ? AND deleted_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM dimension_values v WHERE v.dimension_id = dimensions.id AND v.deleted_at IS NULL)`,
+        now,
+        now,
+        key,
       );
     }
   },

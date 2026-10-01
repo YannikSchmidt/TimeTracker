@@ -17,10 +17,10 @@ const meta = { createdAt: 0, updatedAt: 0, deletedAt: null };
 
 let seq = 0;
 function entry(start: string, end: string | null, valueIds: string[] = []): Entry {
-  return { id: `e${seq++}`, startAt: at(start), endAt: end ? at(end) : null, note: '', valueIds, ...meta };
+  return { id: `e${seq++}`, startAt: at(start), endAt: end ? at(end) : null, note: '', valueIds, articleId: null, orderNo: null, quantity: null, ...meta };
 }
 
-const settings: Settings = { weeklyTargetHours: 40, workDays: [1, 2, 3, 4, 5] };
+const settings: Settings = { weeklyTargetHours: 40, workDays: [1, 2, 3, 4, 5], defaultQuantity: 24 };
 
 // Woche Mo 02.03.2026 – So 08.03.2026
 const week = periodRange('week', at('2026-03-04T12:00'));

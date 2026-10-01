@@ -11,6 +11,7 @@ import { useQuery } from '../../data/DataProvider';
 import { dailyTotals } from '../../domain/stats';
 import { dayKey, formatDuration } from '../../domain/time';
 import type { Entry } from '../../domain/types';
+import { useArticles } from '../../hooks/useArticles';
 import { useDimensions } from '../../hooks/useDimensions';
 import { useNow } from '../../hooks/useNow';
 import { spacing, usePalette } from '../../theme';
@@ -18,6 +19,7 @@ import { spacing, usePalette } from '../../theme';
 export default function EntriesScreen() {
   const p = usePalette();
   const dims = useDimensions();
+  const articles = useArticles();
   const now = useNow(30_000);
   const { data: entries } = useQuery((r) => r.entries.listAll());
 
@@ -53,7 +55,7 @@ export default function EntriesScreen() {
             <Text style={{ color: p.muted, fontWeight: '600' }}>{formatDuration(section.total)}</Text>
           </View>
         )}
-        renderItem={({ item }) => <EntryRow entry={item} valuesById={dims.valuesById} now={now} />}
+        renderItem={({ item }) => <EntryRow entry={item} valuesById={dims.valuesById} articlesById={articles.byId} now={now} />}
         ListEmptyComponent={<Empty text={entries ? 'Noch keine Einträge. Starte den Timer oder trage Zeit nach.' : 'Lädt …'} />}
       />
       <Pressable

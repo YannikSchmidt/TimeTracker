@@ -2,14 +2,17 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { newId } from '../../db/ids';
 import type { Entry, Millis } from '../../domain/types';
-import type { EntryInput, EntryRepository } from '../types';
-import { validateEntry } from '../validation';
+import type { EntryInput, EntryRepository, StartInput } from '../types';
+import { validateEntry, validateQuantity } from '../validation';
 
 interface EntryRow {
   id: string;
   start_at: number;
   end_at: number | null;
   note: string;
+  article_id: string | null;
+  order_no: string | null;
+  quantity: number | null;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
@@ -22,6 +25,9 @@ function toEntry(row: EntryRow, valueIds: string[]): Entry {
     endAt: row.end_at,
     note: row.note,
     valueIds,
+    articleId: row.article_id,
+    orderNo: row.order_no,
+    quantity: row.quantity,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
@@ -80,7 +86,8 @@ export class SqliteEntryRepository implements EntryRepository {
     return entry;
   }
 
-  async start(input: Partial<Pick<EntryInput, 'note' | 'valueIds'>> = {}): Promise<Entry> {
+  async start(input: StartInput = {}): Promise<Entry> {
+    validateQuantity(input.quantity);
     const now = Date.now();
     let created!: Entry;
     await this.db.withTransactionAsync(async () => {
@@ -89,7 +96,15 @@ export class SqliteEntryRepository implements EntryRepository {
         now,
         now,
       );
-      created = await this.insert({ startAt: now, endAt: null, note: input.note ?? '', valueIds: input.valueIds ?? [] });
+      created = await this.insert({
+        startAt: now,
+        endAt: null,
+        note: input.note ?? '',
+        valueIds: input.valueIds ?? [],
+        articleId: input.articleId ?? null,
+        orderNo: input.orderNo ?? null,
+        quantity: input.quantity ?? null,
+      });
     });
     return created;
   }
@@ -111,11 +126,15 @@ export class SqliteEntryRepository implements EntryRepository {
     const now = Date.now();
     const id = newId();
     await this.db.runAsync(
-      'INSERT INTO entries (id, start_at, end_at, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      `INSERT INTO entries (id, start_at, end_at, note, article_id, order_no, quantity, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       input.startAt,
       input.endAt,
       input.note,
+      input.articleId,
+      input.orderNo,
+      input.quantity,
       now,
       now,
     );
@@ -137,10 +156,14 @@ export class SqliteEntryRepository implements EntryRepository {
     validateEntry(next);
     await this.db.withTransactionAsync(async () => {
       await this.db.runAsync(
-        'UPDATE entries SET start_at = ?, end_at = ?, note = ?, updated_at = ? WHERE id = ?',
+        `UPDATE entries SET start_at = ?, end_at = ?, note = ?, article_id = ?, order_no = ?, quantity = ?, updated_at = ?
+         WHERE id = ?`,
         next.startAt,
         next.endAt,
         next.note,
+        next.articleId,
+        next.orderNo,
+        next.quantity,
         Date.now(),
         id,
       );

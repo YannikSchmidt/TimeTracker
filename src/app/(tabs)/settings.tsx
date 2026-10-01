@@ -30,6 +30,21 @@ export default function SettingsScreen() {
     setHoursFor(settings.weeklyTargetHours);
     setHours(String(settings.weeklyTargetHours).replace('.', ','));
   }
+  const [qty, setQty] = useState('');
+  const [qtyFor, setQtyFor] = useState<number | null>(null);
+  if (settings && settings.defaultQuantity !== qtyFor) {
+    setQtyFor(settings.defaultQuantity);
+    setQty(String(settings.defaultQuantity));
+  }
+
+  const saveQty = () => {
+    const value = Number.parseInt(qty, 10);
+    if (Number.isInteger(value) && value >= 0) {
+      void mutate((r) => r.settings.set({ defaultQuantity: value }));
+    } else if (settings) {
+      setQty(String(settings.defaultQuantity));
+    }
+  };
 
   const saveHours = () => {
     const value = Number(hours.replace(',', '.'));
@@ -72,8 +87,9 @@ export default function SettingsScreen() {
 
   const exportCsv = async () => {
     const entries = await repos.entries.listAll();
+    const articles = await repos.articles.list();
     // BOM, damit Excel Umlaute korrekt erkennt
-    const csv = '\uFEFF' + entriesToCsv(entries, dims.dimensions, dims.values, Date.now());
+    const csv = '\uFEFF' + entriesToCsv(entries, dims.dimensions, dims.values, articles, Date.now());
     await shareFile(`zeiten-${stamp()}.csv`, csv, 'text/csv');
   };
 
@@ -114,6 +130,24 @@ export default function SettingsScreen() {
             <Chip key={label} label={label} selected={settings?.workDays.includes(i + 1)} onPress={() => toggleWorkDay(i + 1)} />
           ))}
         </View>
+      </Card>
+
+      <SectionTitle>Stückzahl</SectionTitle>
+      <Card style={{ gap: spacing.sm }}>
+        <View style={styles.row}>
+          <Text style={[styles.label, { color: p.text, flex: 1 }]}>Standard-Stückzahl</Text>
+          <TextInput
+            value={qty}
+            onChangeText={(t) => setQty(t.replace(/[^0-9]/g, ''))}
+            onBlur={saveQty}
+            keyboardType="number-pad"
+            accessibilityLabel="Standard-Stückzahl"
+            style={[styles.smallInput, { color: p.text, borderColor: p.border }]}
+          />
+        </View>
+        <Text style={{ color: p.muted, fontSize: 12 }}>
+          Wird beim Start vorgeschlagen. Hat ein Artikel schon Einträge, wird stattdessen seine häufigste Stückzahl vorgeschlagen.
+        </Text>
       </Card>
 
       <SectionTitle>Merkmale</SectionTitle>

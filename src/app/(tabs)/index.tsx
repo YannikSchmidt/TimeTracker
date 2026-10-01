@@ -1,4 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
 import { addDays, startOfDay } from 'date-fns';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -8,6 +10,7 @@ import { Card, Empty, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
 import { totalMs } from '../../domain/stats';
 import { formatClock, formatDuration } from '../../domain/time';
+import { articleLabel, useArticles } from '../../hooks/useArticles';
 import { useDimensions } from '../../hooks/useDimensions';
 import { useNow } from '../../hooks/useNow';
 import { radius, spacing, usePalette } from '../../theme';
@@ -16,6 +19,7 @@ export default function TimerScreen() {
   const p = usePalette();
   const { mutate } = useData();
   const dims = useDimensions();
+  const articles = useArticles();
   const now = useNow(1000);
 
   const dayStart = startOfDay(now).getTime();
@@ -45,7 +49,8 @@ export default function TimerScreen() {
       await mutate((r) => r.entries.update(running.id, { note, valueIds }).then(() => r.entries.stop(running.id)));
       setNote('');
     } else {
-      await mutate((r) => r.entries.start({ note, valueIds }));
+      // Erst Artikel/Auftrag/Stückzahl abfragen – der Timer startet am Ende der Abfrage.
+      router.push({ pathname: '/start', params: { valueIds: JSON.stringify(valueIds), note } });
     }
   };
 
@@ -59,6 +64,7 @@ export default function TimerScreen() {
   };
 
   const elapsed = running ? now - running.startAt : 0;
+  const runningArticle = running?.articleId ? articles.byId.get(running.articleId) : undefined;
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
@@ -79,6 +85,17 @@ export default function TimerScreen() {
           <Text style={styles.bigButtonText}>{running ? 'Stopp' : 'Start'}</Text>
         </Pressable>
       </View>
+
+      {running && (
+        <Pressable accessibilityRole="button" accessibilityLabel="Laufenden Eintrag bearbeiten" onPress={() => router.push(`/entry/${running.id}`)}>
+          <Card style={styles.jobCard}>
+            <JobInfo icon="cube-outline" label="Artikel" value={runningArticle ? articleLabel(runningArticle) : '–'} />
+            <JobInfo icon="document-text-outline" label="Auftrag" value={running.orderNo ?? '–'} />
+            <JobInfo icon="layers-outline" label="Stückzahl" value={running.quantity == null ? '–' : `${running.quantity} Stk`} />
+            <Text style={{ color: p.primary, fontSize: 13 }}>Tippen zum Bearbeiten</Text>
+          </Card>
+        </Pressable>
+      )}
 
       <Card style={{ gap: spacing.lg }}>
         <DimensionPicker dims={dims} selected={valueIds} onChange={changeValues} />
@@ -102,7 +119,7 @@ export default function TimerScreen() {
         ) : (
           <View style={{ gap: spacing.sm }}>
             {today.map((e) => (
-              <EntryRow key={e.id} entry={e} valuesById={dims.valuesById} now={now} />
+              <EntryRow key={e.id} entry={e} valuesById={dims.valuesById} articlesById={articles.byId} now={now} />
             ))}
           </View>
         )}
@@ -111,8 +128,23 @@ export default function TimerScreen() {
   );
 }
 
+function JobInfo({ icon, label, value }: { icon: 'cube-outline' | 'document-text-outline' | 'layers-outline'; label: string; value: string }) {
+  const p = usePalette();
+  return (
+    <View style={styles.jobRow}>
+      <Ionicons name={icon} size={20} color={p.muted} />
+      <Text style={{ color: p.muted, width: 80 }}>{label}</Text>
+      <Text style={{ color: p.text, fontWeight: '700', fontSize: 16, flex: 1 }} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, gap: spacing.xl },
+  jobCard: { gap: spacing.sm },
+  jobRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   timerBox: { alignItems: 'center', gap: spacing.sm, paddingTop: spacing.lg },
   clock: { fontSize: 56, fontWeight: '300', fontVariant: ['tabular-nums'] },
   bigButton: {

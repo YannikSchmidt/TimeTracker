@@ -1,12 +1,20 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { DateTimeField } from '../../components/DateTimeField';
+import {
+  ArticleField,
+  OrderField,
+  QuantityField,
+  parseQuantity,
+  type ArticleFieldHandle,
+} from '../../components/EntryFields';
 import { DimensionPicker } from '../../components/ValuePicker';
 import { Button, Card, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
 import { formatDuration } from '../../domain/time';
+import { useArticles } from '../../hooks/useArticles';
 import { useDimensions } from '../../hooks/useDimensions';
 import { radius, spacing, usePalette } from '../../theme';
 
@@ -19,12 +27,17 @@ export default function EntryScreen() {
   const isNew = id === 'new';
   const { mutate } = useData();
   const dims = useDimensions();
+  const articles = useArticles();
+  const articleRef = useRef<ArticleFieldHandle>(null);
   const { data: entry } = useQuery((r) => (isNew ? Promise.resolve(null) : r.entries.get(id)), [id]);
 
   const [startAt, setStartAt] = useState(() => Date.now() - HOUR);
   const [endAt, setEndAt] = useState<number | null>(() => Date.now());
   const [note, setNote] = useState('');
   const [valueIds, setValueIds] = useState<string[]>([]);
+  const [articleId, setArticleId] = useState<string | null>(null);
+  const [orderNo, setOrderNo] = useState('');
+  const [quantity, setQuantity] = useState('');
   const [loaded, setLoaded] = useState(isNew);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -34,6 +47,9 @@ export default function EntryScreen() {
     setEndAt(entry.endAt);
     setNote(entry.note);
     setValueIds(entry.valueIds);
+    setArticleId(entry.articleId);
+    setOrderNo(entry.orderNo ?? '');
+    setQuantity(entry.quantity == null ? '' : String(entry.quantity));
     setLoaded(true);
   }
 
@@ -41,8 +57,18 @@ export default function EntryScreen() {
   const invalid = !running && endAt <= startAt;
 
   const save = async () => {
+    // Getippte, unbekannte Artikelnummer → erst Rückfrage im Feld beantworten.
+    if (!(await articleRef.current?.commit() ?? true)) return;
     try {
-      const input = { startAt, endAt, note: note.trim(), valueIds };
+      const input = {
+        startAt,
+        endAt,
+        note: note.trim(),
+        valueIds,
+        articleId,
+        orderNo: orderNo.trim() || null,
+        quantity: parseQuantity(quantity),
+      };
       await mutate(async (r) => {
         if (isNew) await r.entries.create(input);
         else await r.entries.update(id, input);
@@ -81,6 +107,21 @@ export default function EntryScreen() {
         <Text style={[styles.duration, { color: invalid ? p.danger : p.muted }]}>
           {invalid ? 'Ende muss nach dem Start liegen' : running ? 'Timer läuft' : `Dauer: ${formatDuration(endAt - startAt)}`}
         </Text>
+      </Card>
+
+      <Card style={{ gap: spacing.lg }}>
+        <View>
+          <SectionTitle>Artikel</SectionTitle>
+          <ArticleField ref={articleRef} articles={articles} value={articleId} onChange={setArticleId} />
+        </View>
+        <View>
+          <SectionTitle>Auftrag</SectionTitle>
+          <OrderField value={orderNo} onChange={setOrderNo} />
+        </View>
+        <View>
+          <SectionTitle>Stückzahl</SectionTitle>
+          <QuantityField value={quantity} onChange={setQuantity} />
+        </View>
       </Card>
 
       <Card style={{ gap: spacing.lg }}>

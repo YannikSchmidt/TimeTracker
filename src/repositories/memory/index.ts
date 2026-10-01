@@ -1,6 +1,6 @@
-import { DEFAULT_DIMENSIONS } from '../../domain/defaults';
-import { DEFAULT_SETTINGS, type Dimension, type DimensionValue, type Entry, type Millis, type Settings } from '../../domain/types';
-import { validateEntry } from '../validation';
+import { DEFAULT_DIMENSIONS, OBSOLETE_DIMENSION_KEYS } from '../../domain/defaults';
+import { DEFAULT_SETTINGS, type Article, type Dimension, type DimensionValue, type Entry, type Millis, type Settings } from '../../domain/types';
+import { duplicateArticleError, normalizeArticleNumber, validateEntry, validateQuantity } from '../validation';
 import type { BackupData, EntryInput, Repositories } from '../types';
 
 export interface MemoryOptions {
@@ -17,9 +17,11 @@ export interface MemoryOptions {
  * und für Tests. Gleiches Verhalten wie die SQLite-Variante.
  */
 export function createMemoryRepositories({ initial, persist, makeId, now = Date.now }: MemoryOptions): Repositories {
-  let entries: Entry[] = initial?.entries.map((e) => ({ ...e, valueIds: [...e.valueIds] })) ?? [];
+  // Ältere Stände kennen Artikel/Auftrag/Stückzahl noch nicht → mit null auffüllen.
+  let entries: Entry[] = (initial?.entries ?? []).map(withEntryDefaults);
   let dimensions: Dimension[] = initial?.dimensions.map((d) => ({ ...d })) ?? [];
   let values: DimensionValue[] = initial?.values.map((v) => ({ ...v })) ?? [];
+  let articles: Article[] = initial?.articles?.map((a) => ({ ...a })) ?? [];
   let settings: Settings = { ...DEFAULT_SETTINGS, ...initial?.settings };
 
   if (dimensions.length === 0) {
@@ -28,6 +30,13 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
       id: makeId(), ...d, sort: i, createdAt: t, updatedAt: t, deletedAt: null,
     }));
   }
+  // Wie SQLite-Migration v2: unbenutztes Merkmal „Auftrag“ entfernen (jetzt eigenes Feld).
+  for (const d of dimensions) {
+    const used = values.some((v) => v.dimensionId === d.id && !v.deletedAt);
+    if (OBSOLETE_DIMENSION_KEYS.includes(d.key) && !d.deletedAt && !used) {
+      Object.assign(d, { deletedAt: now(), updatedAt: now() });
+    }
+  }
 
   const snapshot = (): BackupData => ({
     version: 1,
@@ -35,9 +44,11 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
     entries: entries.map((e) => ({ ...e, valueIds: [...e.valueIds] })),
     dimensions: dimensions.map((d) => ({ ...d })),
     values: values.map((v) => ({ ...v })),
+    articles: articles.map((a) => ({ ...a })),
     settings: { ...settings, workDays: [...settings.workDays] },
   });
   const changed = () => persist?.(snapshot());
+  const findArticle = (number: string) => articles.find((a) => a.number === number && !a.deletedAt);
   const copy = (e: Entry): Entry => ({ ...e, valueIds: [...e.valueIds] });
   const live = () => entries.filter((e) => !e.deletedAt).sort((a, b) => b.startAt - a.startAt);
 
@@ -65,11 +76,20 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
         return e ? copy(e) : null;
       },
       async start(input = {}) {
+        validateQuantity(input.quantity);
         const t = now();
         for (const e of entries) {
           if (e.endAt === null && !e.deletedAt) Object.assign(e, { endAt: t, updatedAt: t });
         }
-        const created = insert({ startAt: t, endAt: null, note: input.note ?? '', valueIds: input.valueIds ?? [] });
+        const created = insert({
+          startAt: t,
+          endAt: null,
+          note: input.note ?? '',
+          valueIds: input.valueIds ?? [],
+          articleId: input.articleId ?? null,
+          orderNo: input.orderNo ?? null,
+          quantity: input.quantity ?? null,
+        });
         changed();
         return created;
       },
@@ -149,6 +169,59 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
       },
     },
 
+    articles: {
+      async list() {
+        return articles
+          .filter((a) => !a.deletedAt)
+          .sort((a, b) => a.number.localeCompare(b.number, 'de', { numeric: true, sensitivity: 'base' }))
+          .map((a) => ({ ...a }));
+      },
+      async get(id) {
+        const a = articles.find((x) => x.id === id);
+        return a ? { ...a } : null;
+      },
+      async findByNumber(number) {
+        const a = findArticle(number.trim());
+        return a ? { ...a } : null;
+      },
+      async create(input) {
+        const number = normalizeArticleNumber(input.number);
+        if (findArticle(number)) throw duplicateArticleError(number);
+        const t = now();
+        const article: Article = {
+          id: makeId(), number, name: input.name.trim(), description: input.description.trim(),
+          createdAt: t, updatedAt: t, deletedAt: null,
+        };
+        articles.push(article);
+        changed();
+        return { ...article };
+      },
+      async update(id, input) {
+        const a = articles.find((x) => x.id === id);
+        if (!a) throw new Error('Artikel nicht gefunden.');
+        const number = input.number === undefined ? a.number : normalizeArticleNumber(input.number);
+        const other = findArticle(number);
+        if (other && other.id !== id) throw duplicateArticleError(number);
+        Object.assign(a, {
+          number,
+          name: (input.name ?? a.name).trim(),
+          description: (input.description ?? a.description).trim(),
+          updatedAt: now(),
+        });
+        changed();
+      },
+      async remove(id) {
+        const a = articles.find((x) => x.id === id);
+        if (!a) return;
+        const t = now();
+        Object.assign(a, { deletedAt: t, updatedAt: t });
+        for (const e of entries) {
+          if (e.articleId === id) Object.assign(e, { articleId: null, updatedAt: t });
+        }
+        changed();
+      },
+    },
+
     settings: {
       async get() {
         return { ...settings, workDays: [...settings.workDays] };
@@ -181,12 +254,33 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
       for (const v of data.values) {
         values = upsert(values, { ...v, dimensionId: dimIdMap.get(v.dimensionId) ?? v.dimensionId });
       }
-      for (const e of data.entries) entries = upsert(entries, { ...e, valueIds: [...e.valueIds] });
+      // Artikelnummern sind eindeutig → gleiche Nummer mit anderer ID auf den lokalen Artikel abbilden.
+      const articleIdMap = new Map<string, string>();
+      for (const a of data.articles ?? []) {
+        const local = findArticle(a.number);
+        if (local && local.id !== a.id && !a.deletedAt) articleIdMap.set(a.id, local.id);
+        else articles = upsert(articles, { ...a });
+      }
+      for (const e of data.entries) {
+        const entry = withEntryDefaults(e);
+        if (entry.articleId) entry.articleId = articleIdMap.get(entry.articleId) ?? entry.articleId;
+        entries = upsert(entries, entry);
+      }
       if (data.settings) settings = { ...settings, ...data.settings };
       changed();
     },
   };
   return repos;
+}
+
+function withEntryDefaults(e: Entry): Entry {
+  return {
+    ...e,
+    valueIds: [...e.valueIds],
+    articleId: e.articleId ?? null,
+    orderNo: e.orderNo ?? null,
+    quantity: e.quantity ?? null,
+  };
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {

@@ -5,13 +5,19 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript. Alle Daten li
 
 ## Funktionen
 
-- **Timer**: Start/Stopp mit einem Tipp. Ein laufender Timer überlebt das Schließen der App.
+- **Timer**: Beim Start werden nacheinander **Artikelnummer, Auftragsnummer und Stückzahl** abgefragt
+  (jeweils überspringbar, Artikel/Auftrag per Kamera scanbar). Die Zeit läuft ab „Timer starten“.
+  Ein laufender Timer überlebt das Schließen der App.
+- **Stückzahl-Vorschlag**: die häufigste Stückzahl des Artikels, sonst die Standard-Stückzahl (24, einstellbar).
+- **Artikel**: eigener Tab mit Suche, Scan, Nummer, Name und Bezeichnung. Gescannte unbekannte Nummern werden
+  sofort angelegt, bei getippten fragt die App nach, ob man sich vertippt hat.
 - **Einträge**: Liste nach Tagen mit Tagessumme, Einträge bearbeiten, löschen oder nachträglich erfassen.
-- **Merkmale**: Projekt (mit Farbe) und Tags sind aktiv. Person, Auftrag, Typ und Bezeichnung sind vorbereitet
+- **Merkmale**: Projekt (mit Farbe) und Tags sind aktiv. Person, Typ und Bezeichnung sind vorbereitet
   und lassen sich in den Einstellungen einschalten. Eigene Merkmale können hinzugefügt werden.
 - **Statistik** (Woche/Monat/Jahr, vor/zurück blättern):
   - Übersicht: Gesamtzeit, Über-/Fehlstunden gegenüber Soll, Ø pro aktivem Tag, Anzahl Einträge, Säulendiagramm
-  - Aufklappbare Details: Verteilung nach Merkmal (Ring + Liste), Verlauf (12 Wochen/Monate),
+  - Aufklappbare Details: Verteilung nach Artikel, Auftrag oder Merkmal (Ring + Liste),
+    Artikel & Stückzahlen (Zeit, Stück, Minuten pro Stück), Verlauf (12 Wochen/Monate),
     weitere Kennzahlen (längste Session, Serie, …), Wochentage, Tageszeiten
 - **Einstellungen**: Wochen-Sollstunden, Arbeitstage, CSV-Export (Excel), JSON-Backup exportieren/importieren.
 
@@ -35,7 +41,8 @@ npm run build:preview   # → dist-preview/timetracker.html (eine Datei, alles e
 ```
 
 Die Datei läuft in jedem Browser, auch auf dem Handy. Im Browser werden die Daten im `localStorage`
-gespeichert statt in SQLite, und Export/Backup sind dort ausgeblendet.
+gespeichert statt in SQLite, und Export/Backup sind dort ausgeblendet. Scannen funktioniert dort per Foto
+(die Kamera-App öffnet sich, das Foto wird ausgewertet) statt mit Live-Kamerabild.
 
 Eine installierbare App (APK / TestFlight) lässt sich später mit [EAS Build](https://docs.expo.dev/build/introduction/) erzeugen.
 
