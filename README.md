@@ -5,21 +5,23 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript. Alle Daten li
 
 ## Funktionen
 
-- **Timer**: Beim Start werden nacheinander **Artikelnummer, Auftragsnummer und Stückzahl** abgefragt
-  (jeweils überspringbar, Artikel/Auftrag per Kamera scanbar). Die Zeit läuft ab „Timer starten“.
-  Ein laufender Timer überlebt das Schließen der App.
-- **Stückzahl-Vorschlag**: die häufigste Stückzahl des Artikels, sonst die Standard-Stückzahl (24, einstellbar).
-- **Artikel**: eigener Tab mit Suche, Scan, Nummer, Name und Bezeichnung. Gescannte unbekannte Nummern werden
-  sofort angelegt, bei getippten fragt die App nach, ob man sich vertippt hat.
-- **Einträge**: Liste nach Tagen mit Tagessumme, Einträge bearbeiten, löschen oder nachträglich erfassen.
-- **Merkmale**: Projekt (mit Farbe) und Tags sind aktiv. Person, Typ und Bezeichnung sind vorbereitet
-  und lassen sich in den Einstellungen einschalten. Eigene Merkmale können hinzugefügt werden.
-- **Statistik** (Woche/Monat/Jahr, vor/zurück blättern):
-  - Übersicht: Gesamtzeit, Über-/Fehlstunden gegenüber Soll, Ø pro aktivem Tag, Anzahl Einträge, Säulendiagramm
-  - Aufklappbare Details: Verteilung nach Artikel, Auftrag oder Merkmal (Ring + Liste),
-    Artikel & Stückzahlen (Zeit, Stück, Minuten pro Stück), Verlauf (12 Wochen/Monate),
-    weitere Kennzahlen (längste Session, Serie, …), Wochentage, Tageszeiten
-- **Einstellungen**: Wochen-Sollstunden, Arbeitstage, CSV-Export (Excel), JSON-Backup exportieren/importieren.
+- **Aufträge als Timer-Liste**: Mehrere Aufträge können offen sein, aber immer läuft nur einer.
+  Starten oder Fortsetzen eines Auftrags pausiert automatisch den laufenden. Jeder Auftrag ist pausierbar.
+- **Start mit Scan zuerst**: „Neuer Auftrag“ → Auftrags-Code scannen → Artikel-Code scannen → Start.
+  Ist der Auftrag schon bekannt, werden Artikel und Stückzahl übernommen und der Artikel-Schritt entfällt.
+  Eintippen und „ohne Auftrag/Artikel“ sind jederzeit möglich.
+- **Vorschläge aus früheren Eingaben**: zuletzt verwendete Auftragsnummern, häufige Artikel, Stückzahl
+  (häufigste des Artikels, sonst Standard 24 – einstellbar) und bisherige Nacharbeitsgründe.
+- **Nacharbeit**: eigener Timer zu einem Auftrag (offen oder abgeschlossen). Beim Beenden wird der Grund
+  eingetragen – bisherige Gründe stehen als Vorschlag bereit.
+- **Abschluss**: zeigt die **Arbeitszeit** (Timer lief) groß, dazu Gesamtzeit (erster Start bis Abschluss),
+  Pausen und die Nacharbeit.
+- **Verlauf**: Aufträge nach Tag mit Arbeitszeit, Gesamtzeit und Nacharbeit; Arbeitsabschnitte einzeln korrigierbar,
+  Aufträge nachtragbar.
+- **Artikel**: eigener Tab mit Suche, Scan, Nummer, Name und Bezeichnung.
+- **Statistik** (Woche/Monat/Jahr): Arbeitszeit inkl. Anteil Nacharbeit, Soll/Ist, Aufträge, Verteilung nach
+  Artikel/Auftrag/Merkmal, Artikel & Stückzahlen (Zeit, Nacharbeit, Stück, Min/Stück), Nacharbeit nach Grund, Verlauf.
+- **Einstellungen**: Sollstunden, Arbeitstage, Standard-Stückzahl, Merkmale, CSV-Export pro Auftrag, JSON-Backup.
 
 ## Auf dem Handy ausprobieren
 
@@ -68,8 +70,9 @@ src/
 
 ### Datenmodell & späterer Server-Sync
 
-- `entries` (Start, Ende – `NULL` = läuft, Notiz), `dimensions` (Merkmale), `dimension_values` (Werte),
-  `entry_values` (Zuordnung n:m), `settings`.
+- `jobs` (Auftrag bzw. Nacharbeit: Status, Artikel, Auftragsnummer, Stückzahl, Grund, Start/Abschluss),
+  `entries` (Arbeitsabschnitte eines Auftrags: Start, Ende – `NULL` = läuft), `articles`, `dimensions` (Merkmale),
+  `dimension_values`, `job_values` (Zuordnung n:m), `settings`.
 - Alle Datensätze haben UUIDs sowie `created_at`, `updated_at` und `deleted_at` (Soft-Delete).
   Damit kann später ein Server mehrere Geräte über „Änderungen seit `updated_at`“ synchronisieren,
   ohne ID-Konflikte.

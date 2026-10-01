@@ -5,11 +5,13 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 
 import { ScanButton } from '../../components/ScanButton';
 import { Empty } from '../../components/ui';
-import { useData, useQuery } from '../../data/DataProvider';
+import { useData } from '../../data/DataProvider';
+import { jobTimes } from '../../domain/jobs';
 import { suggestQuantity } from '../../domain/quantity';
-import { entryDuration, formatDuration } from '../../domain/time';
+import { formatDuration } from '../../domain/time';
 import { matchArticles, useArticles } from '../../hooks/useArticles';
 import { useNow } from '../../hooks/useNow';
+import { useWork } from '../../hooks/useWork';
 import { radius, spacing, usePalette } from '../../theme';
 
 export default function ArticlesScreen() {
@@ -17,22 +19,22 @@ export default function ArticlesScreen() {
   const { mutate } = useData();
   const articles = useArticles();
   const now = useNow(60_000);
-  const { data: entries } = useQuery((r) => r.entries.listAll());
+  const work = useWork();
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
-  // Nutzung je Artikel: Anzahl Einträge, Gesamtzeit, häufigste Stückzahl
+  // Nutzung je Artikel: Anzahl Aufträge und Arbeitszeit (ohne Nacharbeit)
   const usage = useMemo(() => {
     const map = new Map<string, { count: number; ms: number }>();
-    for (const e of entries ?? []) {
-      if (!e.articleId) continue;
-      const u = map.get(e.articleId) ?? { count: 0, ms: 0 };
+    for (const j of work.jobs) {
+      if (!j.articleId || j.kind !== 'order') continue;
+      const u = map.get(j.articleId) ?? { count: 0, ms: 0 };
       u.count++;
-      u.ms += entryDuration(e, now);
-      map.set(e.articleId, u);
+      u.ms += jobTimes(j, work.entriesOf.get(j.id) ?? [], now).workMs;
+      map.set(j.articleId, u);
     }
     return map;
-  }, [entries, now]);
+  }, [work, now]);
 
   const list = matchArticles(articles.articles, query);
 
@@ -89,7 +91,7 @@ export default function ArticlesScreen() {
         }
         renderItem={({ item }) => {
           const u = usage.get(item.id);
-          const qty = suggestQuantity(entries ?? [], item.id, 0);
+          const qty = suggestQuantity(work.jobs, item.id, 0);
           return (
             <Pressable
               accessibilityRole="button"
@@ -108,7 +110,7 @@ export default function ArticlesScreen() {
                 ) : null}
                 <Text style={{ color: p.muted, fontSize: 12 }}>
                   {u
-                    ? `${u.count} Einträge · ${formatDuration(u.ms)}${qty.source === 'history' ? ` · meist ${qty.quantity} Stk` : ''}`
+                    ? `${u.count} Aufträge · ${formatDuration(u.ms)}${qty.source === 'history' ? ` · meist ${qty.quantity} Stk` : ''}`
                     : 'Noch nicht verwendet'}
                 </Text>
               </View>

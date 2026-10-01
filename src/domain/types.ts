@@ -7,18 +7,50 @@ export interface SyncMeta {
   deletedAt: Millis | null;
 }
 
-export interface Entry extends SyncMeta {
-  id: string;
-  startAt: Millis;
-  /** null = Timer läuft noch */
-  endAt: Millis | null;
-  note: string;
-  /** IDs der zugeordneten Merkmal-Werte (Projekt, Tags, Person, …) */
-  valueIds: string[];
+export type JobKind = 'order' | 'rework';
+export type JobStatus = 'running' | 'paused' | 'done';
+
+/** Felder eines Auftrags, die beim Start/Bearbeiten gesetzt werden. */
+export interface JobFields {
   articleId: string | null;
   orderNo: string | null;
   /** Stückzahl; null = nicht angegeben */
   quantity: number | null;
+  note: string;
+  /** IDs der zugeordneten Merkmal-Werte (Projekt, Tags, Person, …) */
+  valueIds: string[];
+  /** Grund der Nacharbeit (nur bei kind = 'rework') */
+  reworkReason: string | null;
+}
+
+/**
+ * Ein Auftrag bzw. eine Nacharbeit: ein Timer, der pausiert und fortgesetzt werden kann.
+ * Die gelaufene Zeit steckt in den Abschnitten (Entry).
+ */
+export interface Job extends JobFields, SyncMeta {
+  id: string;
+  kind: JobKind;
+  status: JobStatus;
+  /** Bei Nacharbeit: der Auftrag, zu dem sie gehört */
+  parentJobId: string | null;
+  startedAt: Millis;
+  /** Zeitpunkt des Abschlusses; null = offen */
+  finishedAt: Millis | null;
+}
+
+/** Ein Arbeitsabschnitt eines Auftrags (zwischen Start/Fortsetzen und Pause/Beenden). */
+export interface Entry extends SyncMeta {
+  id: string;
+  jobId: string;
+  startAt: Millis;
+  /** null = läuft gerade */
+  endAt: Millis | null;
+}
+
+/** Abschnitt mit den Feldern seines Auftrags – flache Sicht für Statistik und Export. */
+export interface Segment extends Entry, Omit<JobFields, 'reworkReason'> {
+  kind: JobKind;
+  jobStartedAt: Millis;
 }
 
 /** Artikel aus der Artikelverwaltung. */
@@ -32,8 +64,8 @@ export interface Article extends SyncMeta {
 }
 
 /**
- * Ein Merkmal, nach dem Einträge klassifiziert werden können
- * (z.B. Projekt, Tags, Person, Auftrag, Typ, Bezeichnung).
+ * Ein Merkmal, nach dem Aufträge klassifiziert werden können
+ * (z.B. Projekt, Tags, Person, Typ, Bezeichnung).
  */
 export interface Dimension extends SyncMeta {
   id: string;

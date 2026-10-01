@@ -1,11 +1,21 @@
 import { DEFAULT_DIMENSIONS, OBSOLETE_DIMENSION_KEYS } from '../../domain/defaults';
-import { DEFAULT_SETTINGS, type Article, type Dimension, type DimensionValue, type Entry, type Millis, type Settings } from '../../domain/types';
-import { duplicateArticleError, normalizeArticleNumber, validateEntry, validateQuantity } from '../validation';
-import type { BackupData, EntryInput, Repositories } from '../types';
+import { upgradeBackup, type BackupData, type LegacyBackupData } from '../../domain/legacy';
+import {
+  DEFAULT_SETTINGS,
+  type Article,
+  type Dimension,
+  type DimensionValue,
+  type Entry,
+  type Job,
+  type Millis,
+  type Settings,
+} from '../../domain/types';
+import { jobFieldsWithDefaults, sortOpenJobs, type JobStartInput, type Repositories } from '../types';
+import { duplicateArticleError, normalizeArticleNumber, notFound, validateQuantity, validateTimes } from '../validation';
 
 export interface MemoryOptions {
-  /** Zuvor gespeicherter Stand (gleiches Format wie ein Backup). */
-  initial?: BackupData | null;
+  /** Zuvor gespeicherter Stand (gleiches Format wie ein Backup, auch ältere Versionen). */
+  initial?: BackupData | LegacyBackupData | null;
   /** Wird nach jeder Änderung mit dem kompletten Stand aufgerufen. */
   persist?: (snapshot: BackupData) => void;
   makeId: () => string;
@@ -17,12 +27,13 @@ export interface MemoryOptions {
  * und für Tests. Gleiches Verhalten wie die SQLite-Variante.
  */
 export function createMemoryRepositories({ initial, persist, makeId, now = Date.now }: MemoryOptions): Repositories {
-  // Ältere Stände kennen Artikel/Auftrag/Stückzahl noch nicht → mit null auffüllen.
-  let entries: Entry[] = (initial?.entries ?? []).map(withEntryDefaults);
-  let dimensions: Dimension[] = initial?.dimensions.map((d) => ({ ...d })) ?? [];
-  let values: DimensionValue[] = initial?.values.map((v) => ({ ...v })) ?? [];
-  let articles: Article[] = initial?.articles?.map((a) => ({ ...a })) ?? [];
-  let settings: Settings = { ...DEFAULT_SETTINGS, ...initial?.settings };
+  const start = initial ? upgradeBackup(initial) : null;
+  let jobs: Job[] = (start?.jobs ?? []).map(copyJob);
+  let entries: Entry[] = (start?.entries ?? []).map((e) => ({ ...e }));
+  let dimensions: Dimension[] = start?.dimensions.map((d) => ({ ...d })) ?? [];
+  let values: DimensionValue[] = start?.values.map((v) => ({ ...v })) ?? [];
+  let articles: Article[] = start?.articles.map((a) => ({ ...a })) ?? [];
+  let settings: Settings = { ...DEFAULT_SETTINGS, ...start?.settings };
 
   if (dimensions.length === 0) {
     const t = now();
@@ -39,9 +50,10 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
   }
 
   const snapshot = (): BackupData => ({
-    version: 1,
+    version: 2,
     exportedAt: now(),
-    entries: entries.map((e) => ({ ...e, valueIds: [...e.valueIds] })),
+    jobs: jobs.map(copyJob),
+    entries: entries.map((e) => ({ ...e })),
     dimensions: dimensions.map((d) => ({ ...d })),
     values: values.map((v) => ({ ...v })),
     articles: articles.map((a) => ({ ...a })),
@@ -49,81 +61,159 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
   });
   const changed = () => persist?.(snapshot());
   const findArticle = (number: string) => articles.find((a) => a.number === number && !a.deletedAt);
-  const copy = (e: Entry): Entry => ({ ...e, valueIds: [...e.valueIds] });
-  const live = () => entries.filter((e) => !e.deletedAt).sort((a, b) => b.startAt - a.startAt);
+  const liveEntries = () => entries.filter((e) => !e.deletedAt).sort((a, b) => b.startAt - a.startAt);
+  const liveJobs = () => jobs.filter((j) => !j.deletedAt);
+  const findJob = (id: string) => {
+    const j = jobs.find((x) => x.id === id && !x.deletedAt);
+    if (!j) throw notFound();
+    return j;
+  };
 
-  const insert = (input: EntryInput): Entry => {
-    const t = now();
-    const entry: Entry = { id: makeId(), ...input, valueIds: [...new Set(input.valueIds)], createdAt: t, updatedAt: t, deletedAt: null };
-    entries.push(entry);
-    return copy(entry);
+  /** Schließt alle offenen Abschnitte (optional nur eines Auftrags) und pausiert deren Aufträge. */
+  const closeOpen = (t: Millis, jobId?: string) => {
+    for (const e of entries) {
+      if (e.endAt !== null || e.deletedAt || (jobId && e.jobId !== jobId)) continue;
+      Object.assign(e, { endAt: Math.max(t, e.startAt + 1), updatedAt: t });
+      const j = jobs.find((x) => x.id === e.jobId);
+      if (j && j.status === 'running') Object.assign(j, { status: 'paused', updatedAt: t });
+    }
+  };
+
+  const openEntry = (jobId: string, t: Millis) => {
+    entries.push({ id: makeId(), jobId, startAt: t, endAt: null, createdAt: t, updatedAt: t, deletedAt: null });
+  };
+
+  const newJob = (input: JobStartInput, t: Millis, status: Job['status']): Job => {
+    const fields = jobFieldsWithDefaults(input);
+    validateQuantity(fields.quantity);
+    return {
+      id: makeId(),
+      kind: input.kind ?? 'order',
+      status,
+      parentJobId: input.parentJobId ?? null,
+      ...fields,
+      startedAt: t,
+      finishedAt: null,
+      createdAt: t,
+      updatedAt: t,
+      deletedAt: null,
+    };
   };
 
   const repos: Repositories = {
-    entries: {
-      async listInRange(start, end) {
-        return live().filter((e) => e.startAt < end && (e.endAt === null || e.endAt > start)).map(copy);
+    jobs: {
+      async listOpen() {
+        return sortOpenJobs(liveJobs().filter((j) => j.status !== 'done')).map(copyJob);
       },
       async listAll() {
-        return live().map(copy);
+        return liveJobs().sort((a, b) => b.startedAt - a.startedAt).map(copyJob);
       },
       async get(id) {
-        const e = entries.find((x) => x.id === id);
-        return e ? copy(e) : null;
+        const j = jobs.find((x) => x.id === id);
+        return j ? copyJob(j) : null;
       },
-      async getRunning() {
-        const e = live().find((x) => x.endAt === null);
-        return e ? copy(e) : null;
-      },
-      async start(input = {}) {
-        validateQuantity(input.quantity);
+      async start(input) {
         const t = now();
-        for (const e of entries) {
-          if (e.endAt === null && !e.deletedAt) Object.assign(e, { endAt: t, updatedAt: t });
-        }
-        const created = insert({
-          startAt: t,
-          endAt: null,
-          note: input.note ?? '',
-          valueIds: input.valueIds ?? [],
-          articleId: input.articleId ?? null,
-          orderNo: input.orderNo ?? null,
-          quantity: input.quantity ?? null,
+        const job = newJob(input, t, 'running');
+        closeOpen(t);
+        jobs.push(job);
+        openEntry(job.id, t);
+        changed();
+        return copyJob(job);
+      },
+      async pause(id) {
+        const j = findJob(id);
+        if (j.status !== 'running') return;
+        closeOpen(now(), id);
+        changed();
+      },
+      async resume(id) {
+        const j = findJob(id);
+        if (j.status === 'running') return;
+        const t = now();
+        closeOpen(t);
+        openEntry(id, t);
+        Object.assign(j, { status: 'running', finishedAt: null, updatedAt: t });
+        changed();
+      },
+      async finish(id, extra = {}) {
+        const j = findJob(id);
+        const t = now();
+        closeOpen(t, id);
+        const lastEnd = Math.max(j.startedAt, ...entries.filter((e) => e.jobId === id && !e.deletedAt).map((e) => e.endAt ?? t));
+        Object.assign(j, {
+          status: 'done',
+          finishedAt: j.finishedAt ?? lastEnd,
+          reworkReason: extra.reworkReason !== undefined ? extra.reworkReason?.trim() || null : j.reworkReason,
+          updatedAt: t,
         });
         changed();
-        return created;
       },
-      async stop(id, at = now()) {
-        const e = entries.find((x) => x.id === id && x.endAt === null);
-        if (e) {
-          Object.assign(e, { endAt: at, updatedAt: now() });
-          changed();
-        }
-      },
-      async create(input) {
-        validateEntry(input);
-        const created = insert(input);
+      async reopen(id) {
+        const j = findJob(id);
+        if (j.status !== 'done') return;
+        Object.assign(j, { status: 'paused', finishedAt: null, updatedAt: now() });
         changed();
-        return created;
       },
-      async update(id, input) {
-        const e = entries.find((x) => x.id === id);
-        if (!e) throw new Error('Eintrag nicht gefunden.');
-        const next = { ...e, ...input };
-        validateEntry(next);
-        Object.assign(e, next, {
-          valueIds: input.valueIds ? [...new Set(input.valueIds)] : e.valueIds,
-          updatedAt: now(),
-        });
+      async update(id, fields) {
+        const j = findJob(id);
+        const next = jobFieldsWithDefaults({ ...j, ...stripUndefined(fields) });
+        validateQuantity(next.quantity);
+        Object.assign(j, next, { updatedAt: now() });
         changed();
       },
       async remove(id) {
-        const e = entries.find((x) => x.id === id);
-        if (e) {
-          const t = now();
-          Object.assign(e, { deletedAt: t, updatedAt: t });
-          changed();
+        const t = now();
+        const ids = new Set([id, ...jobs.filter((j) => j.parentJobId === id).map((j) => j.id)]);
+        for (const j of jobs) if (ids.has(j.id)) Object.assign(j, { deletedAt: t, updatedAt: t, status: 'done' });
+        for (const e of entries) {
+          if (ids.has(e.jobId) && !e.deletedAt) Object.assign(e, { deletedAt: t, updatedAt: t, endAt: e.endAt ?? t });
         }
+        changed();
+      },
+      async createManual(input, startAt, endAt) {
+        validateTimes(startAt, endAt);
+        const job = newJob(input, startAt, 'done');
+        job.finishedAt = endAt;
+        jobs.push(job);
+        entries.push({ id: makeId(), jobId: job.id, startAt, endAt, createdAt: now(), updatedAt: now(), deletedAt: null });
+        changed();
+        return copyJob(job);
+      },
+    },
+
+    entries: {
+      async listInRange(start, end) {
+        return liveEntries()
+          .filter((e) => e.startAt < end && (e.endAt === null || e.endAt > start))
+          .map((e) => ({ ...e }));
+      },
+      async listAll() {
+        return liveEntries().map((e) => ({ ...e }));
+      },
+      async get(id) {
+        const e = entries.find((x) => x.id === id);
+        return e ? { ...e } : null;
+      },
+      async update(id, input) {
+        const e = entries.find((x) => x.id === id && !x.deletedAt);
+        if (!e) throw notFound('Abschnitt');
+        const startAt = input.startAt ?? e.startAt;
+        const endAt = input.endAt === undefined ? e.endAt : input.endAt;
+        validateTimes(startAt, endAt);
+        Object.assign(e, { startAt, endAt, updatedAt: now() });
+        syncJobBounds(e.jobId);
+        changed();
+      },
+      async remove(id) {
+        const e = entries.find((x) => x.id === id && !x.deletedAt);
+        if (!e) return;
+        const t = now();
+        Object.assign(e, { deletedAt: t, updatedAt: t });
+        const j = jobs.find((x) => x.id === e.jobId);
+        if (j && e.endAt === null && j.status === 'running') Object.assign(j, { status: 'paused', updatedAt: t });
+        syncJobBounds(e.jobId);
+        changed();
       },
     },
 
@@ -215,8 +305,8 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
         if (!a) return;
         const t = now();
         Object.assign(a, { deletedAt: t, updatedAt: t });
-        for (const e of entries) {
-          if (e.articleId === id) Object.assign(e, { articleId: null, updatedAt: t });
+        for (const j of jobs) {
+          if (j.articleId === id) Object.assign(j, { articleId: null, updatedAt: t });
         }
         changed();
       },
@@ -236,10 +326,8 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
       return snapshot();
     },
 
-    async importBackup(data) {
-      if (data?.version !== 1 || !Array.isArray(data.entries)) {
-        throw new Error('Unbekanntes Backup-Format.');
-      }
+    async importBackup(raw) {
+      const data = upgradeBackup(raw);
       // Standard-Merkmale haben auf jedem Gerät eigene IDs → per key zuordnen.
       const dimIdMap = new Map<string, string>();
       for (const d of data.dimensions) {
@@ -256,31 +344,43 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
       }
       // Artikelnummern sind eindeutig → gleiche Nummer mit anderer ID auf den lokalen Artikel abbilden.
       const articleIdMap = new Map<string, string>();
-      for (const a of data.articles ?? []) {
+      for (const a of data.articles) {
         const local = findArticle(a.number);
         if (local && local.id !== a.id && !a.deletedAt) articleIdMap.set(a.id, local.id);
         else articles = upsert(articles, { ...a });
       }
+      // Nur ein Auftrag darf laufen: importierte laufende werden pausiert, wenn lokal schon einer läuft.
+      const localRunning = jobs.some((j) => j.status === 'running' && !j.deletedAt);
+      for (const j of data.jobs) {
+        const job = copyJob(j);
+        if (job.articleId) job.articleId = articleIdMap.get(job.articleId) ?? job.articleId;
+        if (localRunning && job.status === 'running') job.status = 'paused';
+        jobs = upsert(jobs, job);
+      }
       for (const e of data.entries) {
-        const entry = withEntryDefaults(e);
-        if (entry.articleId) entry.articleId = articleIdMap.get(entry.articleId) ?? entry.articleId;
+        const entry = { ...e };
+        if (localRunning && entry.endAt === null) entry.endAt = Math.max(now(), entry.startAt + 1);
         entries = upsert(entries, entry);
       }
       if (data.settings) settings = { ...settings, ...data.settings };
       changed();
     },
   };
+
+  /** Startzeit des Auftrags an den frühesten Abschnitt anpassen (nach Bearbeiten). */
+  function syncJobBounds(jobId: string) {
+    const j = jobs.find((x) => x.id === jobId);
+    const own = entries.filter((e) => e.jobId === jobId && !e.deletedAt);
+    if (!j || own.length === 0) return;
+    j.startedAt = Math.min(...own.map((e) => e.startAt));
+    if (j.status === 'done') j.finishedAt = Math.max(...own.map((e) => e.endAt ?? now()));
+  }
+
   return repos;
 }
 
-function withEntryDefaults(e: Entry): Entry {
-  return {
-    ...e,
-    valueIds: [...e.valueIds],
-    articleId: e.articleId ?? null,
-    orderNo: e.orderNo ?? null,
-    quantity: e.quantity ?? null,
-  };
+function copyJob(j: Job): Job {
+  return { ...j, valueIds: [...(j.valueIds ?? [])] };
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {

@@ -106,6 +106,48 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       );
     }
   },
+
+  // v3: Aufträge (jobs) mit pausierbaren Arbeitsabschnitten (entries).
+  // Jeder bisherige Eintrag wird zu einem Auftrag mit genau einem Abschnitt (gleiche ID).
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE jobs (
+        id TEXT PRIMARY KEY NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'order',
+        status TEXT NOT NULL,
+        article_id TEXT,
+        order_no TEXT,
+        quantity INTEGER,
+        note TEXT NOT NULL DEFAULT '',
+        parent_job_id TEXT,
+        rework_reason TEXT,
+        started_at INTEGER NOT NULL,
+        finished_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        deleted_at INTEGER
+      );
+      CREATE INDEX idx_jobs_status ON jobs(status);
+      CREATE INDEX idx_jobs_parent ON jobs(parent_job_id);
+
+      CREATE TABLE job_values (
+        job_id TEXT NOT NULL,
+        value_id TEXT NOT NULL,
+        PRIMARY KEY (job_id, value_id)
+      );
+
+      ALTER TABLE entries ADD COLUMN job_id TEXT;
+      CREATE INDEX idx_entries_job ON entries(job_id);
+
+      INSERT INTO jobs (id, kind, status, article_id, order_no, quantity, note, started_at, finished_at,
+                        created_at, updated_at, deleted_at)
+        SELECT id, 'order', CASE WHEN end_at IS NULL THEN 'running' ELSE 'done' END, article_id, order_no, quantity,
+               note, start_at, end_at, created_at, updated_at, deleted_at
+        FROM entries;
+      INSERT INTO job_values (job_id, value_id) SELECT entry_id, value_id FROM entry_values;
+      UPDATE entries SET job_id = id;
+    `);
+  },
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

@@ -18,7 +18,7 @@ export default function TabsLayout() {
   return (
     <Tabs screenOptions={{ tabBarActiveTintColor: p.primary }}>
       <Tabs.Screen name="index" options={{ title: 'Timer', tabBarIcon: icon('timer-outline') }} />
-      <Tabs.Screen name="entries" options={{ title: 'Einträge', tabBarIcon: icon('list-outline') }} />
+      <Tabs.Screen name="entries" options={{ title: 'Verlauf', tabBarIcon: icon('list-outline') }} />
       <Tabs.Screen name="articles" options={{ title: 'Artikel', tabBarIcon: icon('cube-outline') }} />
       <Tabs.Screen name="stats" options={{ title: 'Statistik', tabBarIcon: icon('stats-chart-outline') }} />
       <Tabs.Screen name="settings" options={{ title: 'Einstellungen', tabBarIcon: icon('settings-outline') }} />

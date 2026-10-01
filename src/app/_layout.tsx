@@ -11,8 +11,10 @@ export default function RootLayout() {
       <StorageRoot>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="entry/[id]" options={{ presentation: 'modal', title: 'Eintrag' }} />
-          <Stack.Screen name="start" options={{ presentation: 'modal', title: 'Timer starten' }} />
+          <Stack.Screen name="entry/[id]" options={{ presentation: 'modal', title: 'Arbeitsabschnitt' }} />
+          <Stack.Screen name="start" options={{ presentation: 'modal', title: 'Neuer Auftrag' }} />
+          <Stack.Screen name="job/[id]" options={{ title: 'Auftrag' }} />
+          <Stack.Screen name="rework-reason/[id]" options={{ presentation: 'modal', title: 'Nacharbeit beenden' }} />
           <Stack.Screen name="article/[id]" options={{ presentation: 'modal', title: 'Artikel' }} />
         </Stack>
       </StorageRoot>

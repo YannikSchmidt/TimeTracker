@@ -1,178 +1,103 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { newId } from '../../db/ids';
 import type { Entry, Millis } from '../../domain/types';
-import type { EntryInput, EntryRepository, StartInput } from '../types';
-import { validateEntry, validateQuantity } from '../validation';
+import type { EntryRepository } from '../types';
+import { notFound, validateTimes } from '../validation';
 
-interface EntryRow {
+export interface EntryRow {
   id: string;
+  job_id: string;
   start_at: number;
   end_at: number | null;
-  note: string;
-  article_id: string | null;
-  order_no: string | null;
-  quantity: number | null;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
 }
 
-function toEntry(row: EntryRow, valueIds: string[]): Entry {
+export const ENTRY_COLUMNS = 'id, job_id, start_at, end_at, created_at, updated_at, deleted_at';
+
+export function toEntry(row: EntryRow): Entry {
   return {
     id: row.id,
+    jobId: row.job_id,
     startAt: row.start_at,
     endAt: row.end_at,
-    note: row.note,
-    valueIds,
-    articleId: row.article_id,
-    orderNo: row.order_no,
-    quantity: row.quantity,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
   };
 }
 
+/** Arbeitsabschnitte in SQLite (Tabelle `entries`). */
 export class SqliteEntryRepository implements EntryRepository {
   constructor(private readonly db: SQLiteDatabase) {}
 
-  private async withValues(rows: EntryRow[]): Promise<Entry[]> {
-    if (rows.length === 0) return [];
-    const links = await this.db.getAllAsync<{ entry_id: string; value_id: string }>(
-      'SELECT entry_id, value_id FROM entry_values WHERE entry_id IN (SELECT value FROM json_each(?))',
-      JSON.stringify(rows.map((r) => r.id)),
-    );
-    const byEntry = new Map<string, string[]>();
-    for (const link of links) {
-      const list = byEntry.get(link.entry_id) ?? [];
-      list.push(link.value_id);
-      byEntry.set(link.entry_id, list);
-    }
-    return rows.map((row) => toEntry(row, byEntry.get(row.id) ?? []));
-  }
-
   async listInRange(start: Millis, end: Millis): Promise<Entry[]> {
     const rows = await this.db.getAllAsync<EntryRow>(
-      `SELECT * FROM entries
-       WHERE deleted_at IS NULL AND start_at < ? AND (end_at IS NULL OR end_at > ?)
+      `SELECT ${ENTRY_COLUMNS} FROM entries
+       WHERE deleted_at IS NULL AND job_id IS NOT NULL AND start_at < ? AND (end_at IS NULL OR end_at > ?)
        ORDER BY start_at DESC`,
       end,
       start,
     );
-    return this.withValues(rows);
+    return rows.map(toEntry);
   }
 
   async listAll(): Promise<Entry[]> {
     const rows = await this.db.getAllAsync<EntryRow>(
-      'SELECT * FROM entries WHERE deleted_at IS NULL ORDER BY start_at DESC',
+      `SELECT ${ENTRY_COLUMNS} FROM entries WHERE deleted_at IS NULL AND job_id IS NOT NULL ORDER BY start_at DESC`,
     );
-    return this.withValues(rows);
+    return rows.map(toEntry);
   }
 
   async get(id: string): Promise<Entry | null> {
-    const row = await this.db.getFirstAsync<EntryRow>('SELECT * FROM entries WHERE id = ?', id);
-    if (!row) return null;
-    const [entry] = await this.withValues([row]);
-    return entry;
+    const row = await this.db.getFirstAsync<EntryRow>(`SELECT ${ENTRY_COLUMNS} FROM entries WHERE id = ?`, id);
+    return row ? toEntry(row) : null;
   }
 
-  async getRunning(): Promise<Entry | null> {
-    const row = await this.db.getFirstAsync<EntryRow>(
-      'SELECT * FROM entries WHERE deleted_at IS NULL AND end_at IS NULL ORDER BY start_at DESC LIMIT 1',
-    );
-    if (!row) return null;
-    const [entry] = await this.withValues([row]);
-    return entry;
-  }
-
-  async start(input: StartInput = {}): Promise<Entry> {
-    validateQuantity(input.quantity);
-    const now = Date.now();
-    let created!: Entry;
-    await this.db.withTransactionAsync(async () => {
-      await this.db.runAsync(
-        'UPDATE entries SET end_at = ?, updated_at = ? WHERE end_at IS NULL AND deleted_at IS NULL',
-        now,
-        now,
-      );
-      created = await this.insert({
-        startAt: now,
-        endAt: null,
-        note: input.note ?? '',
-        valueIds: input.valueIds ?? [],
-        articleId: input.articleId ?? null,
-        orderNo: input.orderNo ?? null,
-        quantity: input.quantity ?? null,
-      });
-    });
-    return created;
-  }
-
-  async stop(id: string, at: Millis = Date.now()): Promise<void> {
-    await this.db.runAsync('UPDATE entries SET end_at = ?, updated_at = ? WHERE id = ? AND end_at IS NULL', at, Date.now(), id);
-  }
-
-  async create(input: EntryInput): Promise<Entry> {
-    validateEntry(input);
-    let created!: Entry;
-    await this.db.withTransactionAsync(async () => {
-      created = await this.insert(input);
-    });
-    return created;
-  }
-
-  private async insert(input: EntryInput): Promise<Entry> {
-    const now = Date.now();
-    const id = newId();
-    await this.db.runAsync(
-      `INSERT INTO entries (id, start_at, end_at, note, article_id, order_no, quantity, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      id,
-      input.startAt,
-      input.endAt,
-      input.note,
-      input.articleId,
-      input.orderNo,
-      input.quantity,
-      now,
-      now,
-    );
-    await this.setValues(id, input.valueIds);
-    return { id, ...input, createdAt: now, updatedAt: now, deletedAt: null };
-  }
-
-  private async setValues(entryId: string, valueIds: string[]): Promise<void> {
-    await this.db.runAsync('DELETE FROM entry_values WHERE entry_id = ?', entryId);
-    for (const valueId of new Set(valueIds)) {
-      await this.db.runAsync('INSERT INTO entry_values (entry_id, value_id) VALUES (?, ?)', entryId, valueId);
-    }
-  }
-
-  async update(id: string, input: Partial<EntryInput>): Promise<void> {
+  async update(id: string, input: { startAt?: Millis; endAt?: Millis | null }): Promise<void> {
     const current = await this.get(id);
-    if (!current) throw new Error('Eintrag nicht gefunden.');
-    const next = { ...current, ...input };
-    validateEntry(next);
+    if (!current || current.deletedAt) throw notFound('Abschnitt');
+    const startAt = input.startAt ?? current.startAt;
+    const endAt = input.endAt === undefined ? current.endAt : input.endAt;
+    validateTimes(startAt, endAt);
     await this.db.withTransactionAsync(async () => {
-      await this.db.runAsync(
-        `UPDATE entries SET start_at = ?, end_at = ?, note = ?, article_id = ?, order_no = ?, quantity = ?, updated_at = ?
-         WHERE id = ?`,
-        next.startAt,
-        next.endAt,
-        next.note,
-        next.articleId,
-        next.orderNo,
-        next.quantity,
-        Date.now(),
-        id,
-      );
-      if (input.valueIds) await this.setValues(id, input.valueIds);
+      await this.db.runAsync('UPDATE entries SET start_at = ?, end_at = ?, updated_at = ? WHERE id = ?', startAt, endAt, Date.now(), id);
+      await syncJobBounds(this.db, current.jobId);
     });
   }
 
   async remove(id: string): Promise<void> {
+    const current = await this.get(id);
+    if (!current || current.deletedAt) return;
     const now = Date.now();
-    await this.db.runAsync('UPDATE entries SET deleted_at = ?, updated_at = ? WHERE id = ?', now, now, id);
+    await this.db.withTransactionAsync(async () => {
+      await this.db.runAsync('UPDATE entries SET deleted_at = ?, updated_at = ? WHERE id = ?', now, now, id);
+      if (current.endAt === null) {
+        await this.db.runAsync(
+          "UPDATE jobs SET status = 'paused', updated_at = ? WHERE id = ? AND status = 'running'",
+          now,
+          current.jobId,
+        );
+      }
+      await syncJobBounds(this.db, current.jobId);
+    });
   }
+}
+
+/** Startzeit (und bei abgeschlossenen Aufträgen das Ende) an die Abschnitte anpassen. */
+export async function syncJobBounds(db: SQLiteDatabase, jobId: string): Promise<void> {
+  const b = await db.getFirstAsync<{ first: number | null; last: number | null }>(
+    `SELECT MIN(start_at) AS first, MAX(COALESCE(end_at, ?)) AS last
+     FROM entries WHERE job_id = ? AND deleted_at IS NULL`,
+    Date.now(),
+    jobId,
+  );
+  if (b?.first == null) return;
+  await db.runAsync(
+    `UPDATE jobs SET started_at = ?, finished_at = CASE WHEN status = 'done' THEN ? ELSE finished_at END WHERE id = ?`,
+    b.first,
+    b.last,
+    jobId,
+  );
 }

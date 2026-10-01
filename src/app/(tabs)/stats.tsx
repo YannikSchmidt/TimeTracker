@@ -4,9 +4,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BarChart, DonutChart, ShareList, type ShareDatum } from '../../components/charts';
 import { Card, Chip, Empty, Expandable, Segmented } from '../../components/ui';
-import { useQuery } from '../../data/DataProvider';
 import {
   articleProduction,
+  reworkByReason,
   bucketTotals,
   NONE_COLOR,
   totalsByKey,
@@ -23,10 +23,10 @@ import {
   type PeriodKind,
 } from '../../domain/stats';
 import { formatDuration } from '../../domain/time';
-import { DEFAULT_SETTINGS } from '../../domain/types';
 import { articleLabel, useArticles } from '../../hooks/useArticles';
 import { useDimensions } from '../../hooks/useDimensions';
 import { useNow } from '../../hooks/useNow';
+import { useWork } from '../../hooks/useWork';
 import { spacing, usePalette, VALUE_COLORS } from '../../theme';
 
 const PERIODS: { value: PeriodKind; label: string }[] = [
@@ -56,12 +56,9 @@ export default function StatsScreen() {
   /** Gruppierung der Verteilung: Artikel, Auftrag oder ein Merkmal (dessen ID) */
   const [group, setGroup] = useState<string>('article');
 
-  const { data } = useQuery(async (r) => ({
-    entries: await r.entries.listAll(),
-    settings: await r.settings.get(),
-  }));
-  const entries = useMemo(() => data?.entries ?? [], [data]);
-  const settings = data?.settings ?? DEFAULT_SETTINGS;
+  const work = useWork();
+  const entries = work.segments;
+  const settings = work.settings;
 
   const range = useMemo(() => periodRange(kind, anchor), [kind, anchor]);
   const isCurrent = range.start <= now && now < range.end;
@@ -90,8 +87,9 @@ export default function StatsScreen() {
             group === 'order' ? 'Ohne Auftrag' : 'Ohne Artikel',
           ),
       production: articleProduction(entries, range, now),
+      reworkReasons: reworkByReason(entries, work.jobs, range, now),
     };
-  }, [entries, settings, range, kind, now, dimension, dims.values, group, articles.byId]);
+  }, [entries, settings, range, kind, now, dimension, dims.values, group, articles.byId, work.jobs]);
 
   const { kpis } = stats;
   const balancePositive = kpis.balanceMs >= 0;
@@ -115,7 +113,11 @@ export default function StatsScreen() {
 
       {/* Übersicht: das Wichtigste auf einen Blick */}
       <View style={styles.kpiGrid}>
-        <Kpi label="Gesamt" value={formatDuration(kpis.totalMs)} />
+        <Kpi
+          label="Arbeitszeit"
+          value={formatDuration(kpis.totalMs)}
+          hint={kpis.reworkMs > 0 ? `davon Nacharbeit ${formatDuration(kpis.reworkMs)}` : undefined}
+        />
         <Kpi
           label={balancePositive ? 'Überstunden' : 'Fehlstunden'}
           value={`${balancePositive ? '+' : ''}${formatDuration(kpis.balanceMs)}`}
@@ -123,7 +125,7 @@ export default function StatsScreen() {
           hint={`Soll ${formatDuration(kpis.targetMs)}`}
         />
         <Kpi label="Ø pro aktivem Tag" value={formatDuration(kpis.avgPerActiveDayMs)} hint={`${days(kpis.activeDays)} aktiv`} />
-        <Kpi label="Einträge" value={String(kpis.entryCount)} hint={`Serie: ${days(stats.streak)}`} />
+        <Kpi label="Aufträge" value={String(kpis.jobCount)} hint={`Serie: ${days(stats.streak)}`} />
       </View>
 
       <Card>
@@ -156,12 +158,13 @@ export default function StatsScreen() {
 
       <Expandable title="Artikel & Stückzahlen" icon="cube-outline">
         {stats.production.length === 0 ? (
-          <Empty text="Keine Einträge mit Artikel in diesem Zeitraum." />
+          <Empty text="Keine Aufträge mit Artikel in diesem Zeitraum." />
         ) : (
           <View>
             <View style={[styles.tableRow, { borderBottomColor: p.border }]}>
               <Text style={[styles.colName, styles.th, { color: p.muted }]}>Artikel</Text>
               <Text style={[styles.colNum, styles.th, { color: p.muted }]}>Zeit</Text>
+              <Text style={[styles.colNum, styles.th, { color: p.muted }]}>Nacharb.</Text>
               <Text style={[styles.colNum, styles.th, { color: p.muted }]}>Stück</Text>
               <Text style={[styles.colNum, styles.th, { color: p.muted }]}>Min/Stk</Text>
             </View>
@@ -180,6 +183,9 @@ export default function StatsScreen() {
                     ) : null}
                   </View>
                   <Text style={[styles.colNum, { color: p.text }]}>{formatDuration(row.ms)}</Text>
+                  <Text style={[styles.colNum, { color: row.reworkMs > 0 ? p.warning : p.muted }]}>
+                    {row.reworkMs > 0 ? formatDuration(row.reworkMs) : '–'}
+                  </Text>
                   <Text style={[styles.colNum, { color: p.text }]}>{row.pieces || '–'}</Text>
                   <Text style={[styles.colNum, { color: p.text }]}>
                     {row.msPerPiece == null ? '–' : (row.msPerPiece / 60_000).toLocaleString('de-DE', { maximumFractionDigits: 1 })}
@@ -188,8 +194,30 @@ export default function StatsScreen() {
               );
             })}
             <Text style={{ color: p.muted, fontSize: 12, marginTop: spacing.sm }}>
-              Min/Stk: Dauer der Einträge mit Stückzahl geteilt durch ihre Stückzahl.
+              Zeit = Arbeitszeit ohne Nacharbeit. Min/Stk: Arbeitszeit der Aufträge mit Stückzahl geteilt durch ihre Stückzahl.
             </Text>
+          </View>
+        )}
+      </Expandable>
+
+      <Expandable title="Nacharbeit" icon="construct-outline">
+        {stats.reworkReasons.length === 0 ? (
+          <Empty text="Keine Nacharbeit in diesem Zeitraum." />
+        ) : (
+          <View style={{ gap: spacing.md }}>
+            <Text style={{ color: p.text }}>
+              Gesamt <Text style={{ fontWeight: '700', color: p.warning }}>{formatDuration(kpis.reworkMs)}</Text>
+              {kpis.totalMs > 0 ? ` · ${Math.round((kpis.reworkMs / kpis.totalMs) * 100)}% der Arbeitszeit` : ''}
+            </Text>
+            <ShareList
+              data={stats.reworkReasons.map((r, i) => ({
+                key: r.key ?? 'none',
+                name: r.key ?? 'Ohne Grund',
+                color: r.key ? VALUE_COLORS[(i + 2) % VALUE_COLORS.length] : NONE_COLOR,
+                ms: r.ms,
+              }))}
+              total={kpis.reworkMs}
+            />
           </View>
         )}
       </Expandable>

@@ -1,122 +1,112 @@
+import { jobTimes, reworkOf, segmentsWithJob } from '../src/domain/jobs';
 import { suggestQuantity } from '../src/domain/quantity';
-import { articleProduction, totalsByKey } from '../src/domain/stats';
-import type { Entry } from '../src/domain/types';
-import { createMemoryRepositories } from '../src/repositories/memory';
+import { articleProduction, reworkByReason, totalsByKey } from '../src/domain/stats';
+import { frequentArticles, lastJobForOrder, recentOrders, reworkReasons } from '../src/domain/suggestions';
+import type { Entry, Job } from '../src/domain/types';
 
 const H = 3_600_000;
 const meta = { createdAt: 0, updatedAt: 0, deletedAt: null };
 let seq = 0;
-function entry(startAt: number, endAt: number | null, extra: Partial<Entry> = {}): Entry {
-  return { id: `e${seq++}`, startAt, endAt, note: '', valueIds: [], articleId: null, orderNo: null, quantity: null, ...meta, ...extra };
-}
 
-describe('suggestQuantity', () => {
-  it('nutzt den Standard ohne Artikel oder Historie', () => {
-    expect(suggestQuantity([], null, 24)).toEqual({ quantity: 24, source: 'default' });
-    expect(suggestQuantity([entry(0, 1, { articleId: 'b', quantity: 10 })], 'a', 24)).toEqual({ quantity: 24, source: 'default' });
-  });
-
-  it('schlägt die häufigste Stückzahl vor', () => {
-    const entries = [
-      entry(1, 2, { articleId: 'a', quantity: 12 }),
-      entry(2, 3, { articleId: 'a', quantity: 12 }),
-      entry(3, 4, { articleId: 'a', quantity: 30 }),
-      entry(4, 5, { articleId: 'a', quantity: null }),
-      { ...entry(5, 6, { articleId: 'a', quantity: 30 }), deletedAt: 9 },
-    ];
-    expect(suggestQuantity(entries, 'a', 24)).toEqual({ quantity: 12, source: 'history' });
-  });
-
-  it('bei Gleichstand gewinnt die zuletzt genutzte', () => {
-    const entries = [entry(1, 2, { articleId: 'a', quantity: 12 }), entry(5, 6, { articleId: 'a', quantity: 30 })];
-    expect(suggestQuantity(entries, 'a', 24).quantity).toBe(30);
-  });
-});
-
-describe('Artikel- und Auftragsstatistik', () => {
-  const range = { start: 0, end: 10 * H };
-  const entries = [
-    entry(0, 2 * H, { articleId: 'a', quantity: 24, orderNo: 'X' }),
-    entry(3 * H, 4 * H, { articleId: 'a', quantity: 6, orderNo: 'Y' }),
-    entry(5 * H, 6 * H, { articleId: 'b', orderNo: 'X' }),
-    entry(9 * H, 11 * H, { articleId: 'b', quantity: 10 }), // ragt aus dem Zeitraum
-    entry(-2 * H, 1 * H, { articleId: 'a', quantity: 100 }), // begann vorher → Stück zählen nicht
-  ];
-
-  it('articleProduction summiert Zeit, Stück und Zeit/Stück', () => {
-    const rows = articleProduction(entries, range, 20 * H);
-    const a = rows.find((r) => r.articleId === 'a')!;
-    expect(a.ms).toBe(4 * H);
-    expect(a.pieces).toBe(30);
-    expect(a.msPerPiece).toBe((3 * H) / 30);
-    expect(a.entryCount).toBe(3);
-    const b = rows.find((r) => r.articleId === 'b')!;
-    expect(b.ms).toBe(2 * H);
-    expect(b.pieces).toBe(10);
-    expect(b.msPerPiece).toBe((2 * H) / 10);
-  });
-
-  it('totalsByKey gruppiert nach Auftrag', () => {
-    expect(totalsByKey(entries, range, (e) => e.orderNo, 20 * H)).toEqual([
-      { key: 'X', ms: 3 * H },
-      { key: null, ms: 2 * H },
-      { key: 'Y', ms: H },
-    ]);
-  });
-});
-
-describe('Artikel im Speicher-Repository', () => {
-  const make = () => {
-    let n = 0;
-    return createMemoryRepositories({ makeId: () => `id${++n}` });
+function job(extra: Partial<Job> = {}): Job {
+  return {
+    id: `j${seq++}`,
+    kind: 'order',
+    status: 'done',
+    articleId: null,
+    orderNo: null,
+    quantity: null,
+    note: '',
+    valueIds: [],
+    reworkReason: null,
+    parentJobId: null,
+    startedAt: 0,
+    finishedAt: null,
+    ...meta,
+    ...extra,
   };
+}
+const seg = (jobId: string, startAt: number, endAt: number | null): Entry => ({ id: `s${seq++}`, jobId, startAt, endAt, ...meta });
 
-  it('legt an, findet per Nummer, verhindert Duplikate', async () => {
-    const r = make();
-    const a = await r.articles.create({ number: ' 4711 ', name: 'Halter', description: 'Stahl' });
-    expect(a.number).toBe('4711');
-    expect((await r.articles.findByNumber('4711'))?.id).toBe(a.id);
-    await expect(r.articles.create({ number: '4711', name: '', description: '' })).rejects.toThrow('gibt es bereits');
-    await expect(r.articles.create({ number: '  ', name: '', description: '' })).rejects.toThrow();
-    const b = await r.articles.create({ number: '0815', name: '', description: '' });
-    await expect(r.articles.update(b.id, { number: '4711' })).rejects.toThrow();
-    await r.articles.update(b.id, { name: 'Neu' });
-    expect((await r.articles.get(b.id))?.name).toBe('Neu');
+describe('jobTimes', () => {
+  it('Arbeitszeit = Summe der Abschnitte, Gesamtzeit = erster Start bis Abschluss', () => {
+    const j = job({ startedAt: 0, finishedAt: 5 * H });
+    const entries = [seg(j.id, 0, 2 * H), seg(j.id, 3 * H, 5 * H), seg('other', 0, 9 * H)];
+    expect(jobTimes(j, entries, 10 * H)).toMatchObject({ workMs: 4 * H, totalMs: 5 * H, pausedMs: H, runningSince: null });
   });
 
-  it('Start speichert Artikel/Auftrag/Stück; Löschen entfernt Zuordnung', async () => {
-    const r = make();
-    const a = await r.articles.create({ number: '1', name: '', description: '' });
-    const e = await r.entries.start({ articleId: a.id, orderNo: 'A-1', quantity: 24 });
-    expect(await r.entries.get(e.id)).toMatchObject({ articleId: a.id, orderNo: 'A-1', quantity: 24 });
-    await expect(r.entries.start({ quantity: -1 })).rejects.toThrow();
-    await r.articles.remove(a.id);
-    expect((await r.entries.get(e.id))?.articleId).toBeNull();
-    expect(await r.articles.list()).toHaveLength(0);
+  it('laufender Auftrag zählt bis jetzt', () => {
+    const j = job({ status: 'running', startedAt: 0 });
+    const t = jobTimes(j, [seg(j.id, 0, H), seg(j.id, 2 * H, null)], 3 * H);
+    expect(t).toMatchObject({ workMs: 2 * H, totalMs: 3 * H, runningSince: 2 * H });
   });
 
-  it('Backup-Import ordnet Artikel per Nummer zu; alte Stände bekommen Defaults', async () => {
-    const source = make();
-    const a = await source.articles.create({ number: '4711', name: 'Halter', description: '' });
-    await source.entries.start({ articleId: a.id, quantity: 12 });
-    const backup = await source.exportBackup();
+  it('pausierter Auftrag: Gesamtzeit läuft weiter bis jetzt', () => {
+    const j = job({ status: 'paused', startedAt: 0 });
+    expect(jobTimes(j, [seg(j.id, 0, H)], 4 * H)).toMatchObject({ workMs: H, totalMs: 4 * H });
+  });
+});
 
-    let n = 0;
-    const target = createMemoryRepositories({ makeId: () => `t${++n}` });
-    const local = await target.articles.create({ number: '4711', name: 'Lokal', description: '' });
-    await target.importBackup(backup);
-    expect(await target.articles.list()).toHaveLength(1);
-    expect((await target.entries.listAll())[0].articleId).toBe(local.id);
+describe('Vorschläge', () => {
+  const jobs = [
+    job({ orderNo: 'A', articleId: 'x', startedAt: 1, quantity: 24 }),
+    job({ orderNo: 'B', articleId: 'y', startedAt: 3 }),
+    job({ orderNo: 'A', articleId: 'x', startedAt: 5, quantity: 30 }),
+    job({ kind: 'rework', orderNo: 'A', reworkReason: 'Grat', startedAt: 6 }),
+    job({ kind: 'rework', reworkReason: 'Maß', startedAt: 7 }),
+    job({ kind: 'rework', reworkReason: 'Grat ', startedAt: 8 }),
+    { ...job({ orderNo: 'Z', startedAt: 9 }), deletedAt: 1 },
+  ];
+  it('Aufträge nach Aktualität, Artikel nach Häufigkeit, Gründe nach Häufigkeit', () => {
+    expect(recentOrders(jobs)).toEqual(['A', 'B']);
+    expect(frequentArticles(jobs)).toEqual(['x', 'y']);
+    expect(reworkReasons(jobs)).toEqual(['Grat', 'Maß']);
+  });
+  it('lastJobForOrder liefert den letzten Auftrag mit der Nummer', () => {
+    expect(lastJobForOrder(jobs, ' A ')?.quantity).toBe(30);
+    expect(lastJobForOrder(jobs, 'nix')).toBeNull();
+  });
+  it('suggestQuantity: häufigste Stückzahl, sonst Standard', () => {
+    const more = [...jobs, job({ articleId: 'x', quantity: 24, startedAt: 2 })];
+    expect(suggestQuantity(more, 'x', 10)).toEqual({ quantity: 24, source: 'history' });
+    expect(suggestQuantity(jobs, 'x', 10).quantity).toBe(30); // Gleichstand → zuletzt verwendet
+    expect(suggestQuantity(jobs, 'y', 10)).toEqual({ quantity: 10, source: 'default' });
+    expect(suggestQuantity(jobs, null, 10).source).toBe('default');
+  });
+});
 
-    const legacy = { ...backup, articles: undefined, entries: backup.entries.map(({ articleId, orderNo, quantity, ...rest }) => rest as Entry) };
-    const restored = createMemoryRepositories({ initial: legacy, makeId: () => 'x' });
-    expect((await restored.entries.listAll())[0]).toMatchObject({ articleId: null, orderNo: null, quantity: null });
+describe('Statistik auf Abschnitten', () => {
+  const range = { start: 0, end: 10 * H };
+  const a = job({ articleId: 'a', quantity: 24, orderNo: 'X', startedAt: 0 });
+  const b = job({ articleId: 'a', quantity: 6, orderNo: 'Y', startedAt: 3 * H });
+  const r = job({ kind: 'rework', parentJobId: a.id, articleId: 'a', orderNo: 'X', reworkReason: 'Grat', startedAt: 6 * H });
+  const old = job({ articleId: 'a', quantity: 100, startedAt: -2 * H });
+  const jobs = [a, b, r, old];
+  const entries = [
+    seg(a.id, 0, H), // Auftrag A mit Pause
+    seg(a.id, 2 * H, 3 * H),
+    seg(b.id, 3 * H, 4 * H),
+    seg(r.id, 6 * H, 6.5 * H),
+    seg(old.id, -2 * H, H), // begann vorher → Stück zählen nicht
+  ];
+  const segments = segmentsWithJob(entries, jobs);
+
+  it('articleProduction: Stück einmal pro Auftrag, Nacharbeit getrennt', () => {
+    const [row] = articleProduction(segments, range, 20 * H);
+    expect(row.ms).toBe(4 * H);
+    expect(row.reworkMs).toBe(0.5 * H);
+    expect(row.pieces).toBe(30);
+    expect(row.jobCount).toBe(3);
+    expect(row.msPerPiece).toBe((3 * H) / 30);
   });
 
-  it('entfernt das alte, unbenutzte Merkmal „Auftrag“ aus gespeicherten Ständen', async () => {
-    const old = await make().exportBackup();
-    old.dimensions.push({ id: 'ord', key: 'order', name: 'Auftrag', multi: false, enabled: false, sort: 9, ...meta });
-    const r = createMemoryRepositories({ initial: old, makeId: () => 'y' });
-    expect((await r.dimensions.listDimensions()).map((d) => d.key)).not.toContain('order');
+  it('totalsByKey nach Auftrag, reworkByReason, reworkOf', () => {
+    expect(totalsByKey(segments, range, (s) => s.orderNo, 20 * H)).toEqual([
+      { key: 'X', ms: 2.5 * H },
+      { key: 'Y', ms: H },
+      { key: null, ms: H },
+    ]);
+    expect(reworkByReason(segments, jobs, range, 20 * H)).toEqual([{ key: 'Grat', ms: 0.5 * H }]);
+    expect(reworkOf(a.id, jobs, entries, 20 * H).map((x) => x.workMs)).toEqual([0.5 * H]);
   });
 });

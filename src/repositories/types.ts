@@ -1,33 +1,48 @@
-import type { Article, Dimension, DimensionValue, Entry, Millis, Settings } from '../domain/types';
+import type { BackupData, LegacyBackupData } from '../domain/legacy';
+import type { Article, Dimension, DimensionValue, Entry, Job, JobFields, JobKind, Millis, Settings } from '../domain/types';
+
+export type { BackupData, LegacyBackupData };
 
 /**
  * Datenzugriff der App. Die UI kennt nur diese Interfaces – eine spätere
  * Server-/Sync-Implementierung kann die SQLite-Variante ersetzen oder ergänzen.
  */
-export interface EntryInput {
-  startAt: Millis;
-  endAt: Millis | null;
-  note: string;
-  valueIds: string[];
-  articleId: string | null;
-  orderNo: string | null;
-  quantity: number | null;
+
+export interface JobStartInput extends Partial<JobFields> {
+  kind?: JobKind;
+  parentJobId?: string | null;
 }
 
-/** Felder, die beim Start eines Timers mitgegeben werden können. */
-export type StartInput = Partial<Pick<EntryInput, 'note' | 'valueIds' | 'articleId' | 'orderNo' | 'quantity'>>;
+/**
+ * Aufträge und Nacharbeiten. Es läuft immer höchstens einer: Starten oder Fortsetzen
+ * pausiert automatisch den laufenden.
+ */
+export interface JobRepository {
+  /** Offene (laufende + pausierte) Aufträge, laufender zuerst, dann zuletzt gestartete. */
+  listOpen(): Promise<Job[]>;
+  listAll(): Promise<Job[]>;
+  get(id: string): Promise<Job | null>;
+  start(input: JobStartInput): Promise<Job>;
+  pause(id: string): Promise<void>;
+  resume(id: string): Promise<void>;
+  /** Beendet den Auftrag (laufender Abschnitt wird geschlossen). */
+  finish(id: string, extra?: { reworkReason?: string | null }): Promise<void>;
+  /** Abgeschlossenen Auftrag wieder öffnen (pausiert). */
+  reopen(id: string): Promise<void>;
+  update(id: string, fields: Partial<JobFields>): Promise<void>;
+  /** Löscht den Auftrag samt Abschnitten und zugehörigen Nacharbeiten. */
+  remove(id: string): Promise<void>;
+  /** Abgeschlossenen Auftrag nachträglich erfassen. */
+  createManual(input: JobStartInput, startAt: Millis, endAt: Millis): Promise<Job>;
+}
 
+/** Arbeitsabschnitte (Zeitspannen) der Aufträge. */
 export interface EntryRepository {
-  /** Einträge, die den Zeitraum [start, end) überlappen (inkl. laufender). */
+  /** Abschnitte, die den Zeitraum [start, end) überlappen (inkl. laufender). */
   listInRange(start: Millis, end: Millis): Promise<Entry[]>;
   listAll(): Promise<Entry[]>;
   get(id: string): Promise<Entry | null>;
-  getRunning(): Promise<Entry | null>;
-  /** Startet einen neuen Timer; ein evtl. laufender wird vorher gestoppt. */
-  start(input?: StartInput): Promise<Entry>;
-  stop(id: string, at?: Millis): Promise<void>;
-  create(input: EntryInput): Promise<Entry>;
-  update(id: string, input: Partial<EntryInput>): Promise<void>;
+  update(id: string, input: { startAt?: Millis; endAt?: Millis | null }): Promise<void>;
   remove(id: string): Promise<void>;
 }
 
@@ -54,7 +69,7 @@ export interface ArticleRepository {
   /** Wirft einen Fehler, wenn die Nummer leer ist oder schon existiert. */
   create(input: ArticleInput): Promise<Article>;
   update(id: string, input: Partial<ArticleInput>): Promise<void>;
-  /** Löscht den Artikel; Einträge verlieren die Zuordnung. */
+  /** Löscht den Artikel; Aufträge verlieren die Zuordnung. */
   remove(id: string): Promise<void>;
 }
 
@@ -63,23 +78,32 @@ export interface SettingsRepository {
   set(input: Partial<Settings>): Promise<void>;
 }
 
-export interface BackupData {
-  version: 1;
-  exportedAt: Millis;
-  entries: Entry[];
-  dimensions: Dimension[];
-  values: DimensionValue[];
-  /** Fehlt in Backups vor Einführung der Artikel. */
-  articles?: Article[];
-  settings: Settings;
-}
-
 export interface Repositories {
+  jobs: JobRepository;
   entries: EntryRepository;
   dimensions: DimensionRepository;
   articles: ArticleRepository;
   settings: SettingsRepository;
   exportBackup(): Promise<BackupData>;
   /** Fügt Daten aus einem Backup ein bzw. überschreibt Datensätze mit gleicher ID. */
-  importBackup(data: BackupData): Promise<void>;
+  importBackup(data: BackupData | LegacyBackupData): Promise<void>;
+}
+
+/** Vollständige Job-Felder mit Standardwerten. */
+export function jobFieldsWithDefaults(input: Partial<JobFields>): JobFields {
+  return {
+    articleId: input.articleId ?? null,
+    orderNo: input.orderNo?.trim() || null,
+    quantity: input.quantity ?? null,
+    note: input.note ?? '',
+    valueIds: [...new Set(input.valueIds ?? [])],
+    reworkReason: input.reworkReason?.trim() || null,
+  };
+}
+
+/** Sortierung offener Aufträge: laufender zuerst, dann zuletzt gestartete. */
+export function sortOpenJobs(jobs: Job[]): Job[] {
+  return [...jobs].sort(
+    (a, b) => Number(b.status === 'running') - Number(a.status === 'running') || b.startedAt - a.startedAt,
+  );
 }

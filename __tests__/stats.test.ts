@@ -9,15 +9,29 @@ import {
   totalsByDimension,
   weekdayTotals,
 } from '../src/domain/stats';
-import type { Dimension, DimensionValue, Entry, Settings } from '../src/domain/types';
+import type { Dimension, DimensionValue, Segment, Settings } from '../src/domain/types';
 
 const H = 3_600_000;
 const at = (s: string) => new Date(s).getTime();
 const meta = { createdAt: 0, updatedAt: 0, deletedAt: null };
 
 let seq = 0;
-function entry(start: string, end: string | null, valueIds: string[] = []): Entry {
-  return { id: `e${seq++}`, startAt: at(start), endAt: end ? at(end) : null, note: '', valueIds, articleId: null, orderNo: null, quantity: null, ...meta };
+function entry(start: string, end: string | null, valueIds: string[] = []): Segment {
+  const id = `e${seq++}`;
+  return {
+    id,
+    jobId: id,
+    kind: 'order',
+    jobStartedAt: at(start),
+    startAt: at(start),
+    endAt: end ? at(end) : null,
+    note: '',
+    valueIds,
+    articleId: null,
+    orderNo: null,
+    quantity: null,
+    ...meta,
+  };
 }
 
 const settings: Settings = { weeklyTargetHours: 40, workDays: [1, 2, 3, 4, 5], defaultQuantity: 24 };
@@ -73,7 +87,8 @@ describe('computeKpis', () => {
     // "jetzt" = Mittwoch → Soll = Mo–Mi = 3 × 8h = 24h
     const k = computeKpis(entries, week, settings, at('2026-03-04T10:00'));
     expect(k.totalMs).toBe(18 * H);
-    expect(k.entryCount).toBe(3);
+    expect(k.jobCount).toBe(3);
+    expect(k.reworkMs).toBe(0);
     expect(k.activeDays).toBe(2);
     expect(k.avgPerActiveDayMs).toBe(9 * H);
     expect(k.longestMs).toBe(10 * H);

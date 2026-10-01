@@ -6,10 +6,10 @@ import { radius, spacing, usePalette } from '../theme';
 import { decodeImage } from './barcode.web';
 
 /**
- * Browser-Version: Live-Kamera ist in eingebetteten Seiten oft gesperrt, Datei-Uploads
- * aber nicht. Der Button öffnet daher die Foto-Aufnahme; das Foto wird ausgewertet.
+ * Browser-Version des eingebetteten Scanners: großer Knopf öffnet die Kamera-App,
+ * das Foto wird ausgewertet (Live-Kamera ist in eingebetteten Seiten oft gesperrt).
  */
-export function ScanButton({ label, onScan }: { label: string; onScan: (code: string) => void }) {
+export function ScannerView({ hint, onScan }: { hint: string; onScan: (code: string) => void }) {
   const p = usePalette();
   const input = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,7 +21,7 @@ export function ScanButton({ label, onScan }: { label: string; onScan: (code: st
     setError(null);
     try {
       const code = await decodeImage(file);
-      if (code) onScan(code.trim());
+      if (code?.trim()) onScan(code.trim());
       else setError('Kein Code erkannt – bitte näher und scharf fotografieren.');
     } catch {
       setError('Das Foto konnte nicht gelesen werden.');
@@ -32,30 +32,36 @@ export function ScanButton({ label, onScan }: { label: string; onScan: (code: st
   };
 
   return (
-    <View>
+    <View style={{ gap: spacing.sm }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={label}
+        accessibilityLabel={hint}
         onPress={() => input.current?.click()}
-        style={({ pressed }) => [styles.button, { backgroundColor: p.primary, opacity: pressed ? 0.8 : 1 }]}
+        style={({ pressed }) => [styles.box, { backgroundColor: p.primary, opacity: pressed ? 0.85 : 1 }]}
       >
-        {busy ? <ActivityIndicator color={p.onPrimary} /> : <Ionicons name="scan-outline" size={22} color={p.onPrimary} />}
+        {busy ? (
+          <ActivityIndicator size="large" color={p.onPrimary} />
+        ) : (
+          <Ionicons name="scan-outline" size={64} color={p.onPrimary} />
+        )}
+        <Text style={[styles.title, { color: p.onPrimary }]}>{hint}</Text>
+        <Text style={{ color: p.onPrimary, opacity: 0.85 }}>Tippen, Code fotografieren</Text>
       </Pressable>
       {createElement('input', {
         ref: input,
         type: 'file',
         accept: 'image/*',
         capture: 'environment',
-        'aria-label': `${label} (Foto)`,
+        'aria-label': `${hint} (Foto)`,
         style: { display: 'none' },
         onChange: (e: { target: HTMLInputElement }) => onFile(e.target.files?.[0]),
       })}
-      {error && <Text style={[styles.error, { color: p.danger }]}>{error}</Text>}
+      {error && <Text style={{ color: p.danger, textAlign: 'center' }}>{error}</Text>}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  button: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  error: { fontSize: 12, marginTop: spacing.xs, maxWidth: 160 },
+  box: { height: 200, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  title: { fontSize: 20, fontWeight: '700' },
 });

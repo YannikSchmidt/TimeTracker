@@ -1,4 +1,4 @@
-import type { Entry } from './types';
+import type { Job } from './types';
 
 export interface QuantitySuggestion {
   quantity: number;
@@ -7,18 +7,18 @@ export interface QuantitySuggestion {
 }
 
 /**
- * Stückzahl-Vorschlag für einen Artikel: die am häufigsten erfasste Stückzahl.
+ * Stückzahl-Vorschlag für einen Artikel: die am häufigsten erfasste Stückzahl seiner Aufträge.
  * Bei Gleichstand gewinnt die zuletzt verwendete. Ohne Historie gilt der Standard.
  */
-export function suggestQuantity(entries: Entry[], articleId: string | null, defaultQuantity: number): QuantitySuggestion {
+export function suggestQuantity(jobs: Job[], articleId: string | null, defaultQuantity: number): QuantitySuggestion {
   if (!articleId) return { quantity: defaultQuantity, source: 'default' };
   const stats = new Map<number, { count: number; lastUsed: number }>();
-  for (const e of entries) {
-    if (e.deletedAt || e.articleId !== articleId || e.quantity == null) continue;
-    const s = stats.get(e.quantity) ?? { count: 0, lastUsed: 0 };
+  for (const j of jobs) {
+    if (j.deletedAt || j.kind !== 'order' || j.articleId !== articleId || j.quantity == null) continue;
+    const s = stats.get(j.quantity) ?? { count: 0, lastUsed: 0 };
     s.count++;
-    s.lastUsed = Math.max(s.lastUsed, e.startAt);
-    stats.set(e.quantity, s);
+    s.lastUsed = Math.max(s.lastUsed, j.startedAt);
+    stats.set(j.quantity, s);
   }
   let best: { quantity: number; count: number; lastUsed: number } | null = null;
   for (const [quantity, s] of stats) {

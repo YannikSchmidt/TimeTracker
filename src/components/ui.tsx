@@ -116,27 +116,37 @@ export function Button({
   title,
   onPress,
   variant = 'primary',
+  size = 'normal',
   icon,
   disabled,
+  accessibilityLabel,
 }: {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'warning';
+  size?: 'normal' | 'large';
   icon?: ComponentProps<typeof Ionicons>['name'];
   disabled?: boolean;
+  accessibilityLabel?: string;
 }) {
   const p = usePalette();
-  const bg = variant === 'primary' ? p.primary : variant === 'danger' ? p.danger : p.track;
+  const bg = { primary: p.primary, danger: p.danger, success: p.success, warning: p.warning, secondary: p.track }[variant];
   const fg = variant === 'secondary' ? p.text : p.onPrimary;
+  const large = size === 'large';
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.button, { backgroundColor: bg, opacity: disabled ? 0.5 : pressed ? 0.8 : 1 }]}
+      style={({ pressed }) => [
+        styles.button,
+        large && styles.buttonLarge,
+        { backgroundColor: bg, opacity: disabled ? 0.5 : pressed ? 0.8 : 1 },
+      ]}
     >
-      {icon && <Ionicons name={icon} size={18} color={fg} />}
-      <Text style={[styles.buttonText, { color: fg }]}>{title}</Text>
+      {icon && <Ionicons name={icon} size={large ? 24 : 18} color={fg} />}
+      <Text style={[styles.buttonText, large && styles.buttonTextLarge, { color: fg }]}>{title}</Text>
     </Pressable>
   );
 }
@@ -184,5 +194,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   buttonText: { fontSize: 16, fontWeight: '600' },
+  buttonLarge: { paddingVertical: spacing.lg, borderRadius: radius.lg },
+  buttonTextLarge: { fontSize: 19, fontWeight: '700' },
   empty: { textAlign: 'center', paddingVertical: spacing.xl },
 });

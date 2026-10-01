@@ -1,10 +1,9 @@
-import type { EntryInput } from './types';
+import type { Millis } from '../domain/types';
 
-export function validateEntry(input: Pick<EntryInput, 'startAt' | 'endAt'> & { quantity?: number | null }): void {
-  if (input.endAt !== null && input.endAt <= input.startAt) {
+export function validateTimes(startAt: Millis, endAt: Millis | null): void {
+  if (endAt !== null && endAt <= startAt) {
     throw new Error('Das Ende muss nach dem Start liegen.');
   }
-  validateQuantity(input.quantity);
 }
 
 export function validateQuantity(quantity: number | null | undefined): void {
@@ -21,4 +20,8 @@ export function normalizeArticleNumber(number: string): string {
 
 export function duplicateArticleError(number: string): Error {
   return new Error(`Artikelnummer ${number} gibt es bereits.`);
+}
+
+export function notFound(what = 'Auftrag'): Error {
+  return new Error(`${what} nicht gefunden.`);
 }

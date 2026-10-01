@@ -7,7 +7,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, V
 
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
-import { entriesToCsv } from '../../domain/export';
+import { jobsToCsv } from '../../domain/export';
 import type { Dimension } from '../../domain/types';
 import { useDimensions, type DimensionsData } from '../../hooks/useDimensions';
 import type { BackupData } from '../../repositories/types';
@@ -86,11 +86,10 @@ export default function SettingsScreen() {
   const stamp = () => format(Date.now(), 'yyyy-MM-dd');
 
   const exportCsv = async () => {
-    const entries = await repos.entries.listAll();
-    const articles = await repos.articles.list();
+    const [jobs, entries, articles] = await Promise.all([repos.jobs.listAll(), repos.entries.listAll(), repos.articles.list()]);
     // BOM, damit Excel Umlaute korrekt erkennt
-    const csv = '\uFEFF' + entriesToCsv(entries, dims.dimensions, dims.values, articles, Date.now());
-    await shareFile(`zeiten-${stamp()}.csv`, csv, 'text/csv');
+    const csv = '\uFEFF' + jobsToCsv(jobs, entries, dims.dimensions, dims.values, articles, Date.now());
+    await shareFile(`auftraege-${stamp()}.csv`, csv, 'text/csv');
   };
 
   const exportJson = async () => {
@@ -104,7 +103,7 @@ export default function SettingsScreen() {
     try {
       const data = JSON.parse(await new File(result.assets[0].uri).text()) as BackupData;
       await mutate((r) => r.importBackup(data));
-      setStatus(`Import abgeschlossen: ${data.entries.length} Einträge übernommen.`);
+      setStatus('Import abgeschlossen.');
     } catch (e) {
       setStatus(`Import fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`);
     }

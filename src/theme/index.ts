@@ -10,6 +10,7 @@ const light = {
   onPrimary: '#FFFFFF',
   danger: '#DC2626',
   success: '#16A34A',
+  warning: '#EA580C',
   track: '#E5E7EB',
 };
 
@@ -25,6 +26,7 @@ const dark: Palette = {
   onPrimary: '#FFFFFF',
   danger: '#EF4444',
   success: '#22C55E',
+  warning: '#F97316',
   track: '#2A2E36',
 };
 

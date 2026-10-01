@@ -1,17 +1,21 @@
 import { format } from 'date-fns';
 
+import { jobTimes } from './jobs';
 import { toHours } from './time';
-import type { Article, Dimension, DimensionValue, Entry } from './types';
+import type { Article, Dimension, DimensionValue, Entry, Job } from './types';
 
 function csvCell(value: string): string {
   return /[";\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
+const hours = (ms: number) => toHours(ms).toFixed(2).replace('.', ',');
+
 /**
  * CSV für Excel (deutsch): Semikolon als Trenner, Komma als Dezimalzeichen.
- * Artikel/Auftrag/Stückzahl und pro Merkmal (Projekt, Tags, …) eine eigene Spalte.
+ * Eine Zeile pro Auftrag bzw. Nacharbeit; Arbeitszeit = Zeit, in der der Timer lief.
  */
-export function entriesToCsv(
+export function jobsToCsv(
+  jobs: Job[],
   entries: Entry[],
   dimensions: Dimension[],
   values: DimensionValue[],
@@ -20,42 +24,61 @@ export function entriesToCsv(
 ): string {
   const valuesById = new Map(values.map((v) => [v.id, v]));
   const articlesById = new Map(articles.map((a) => [a.id, a]));
+  const live = jobs.filter((j) => !j.deletedAt);
   const header = [
+    'Art',
     'Datum',
     'Start',
     'Ende',
-    'Dauer (h)',
+    'Auftragsnummer',
     'Artikelnummer',
     'Artikelname',
-    'Auftragsnummer',
     'Stückzahl',
+    'Arbeitszeit (h)',
+    'Gesamtzeit (h)',
+    'Nacharbeit (h)',
+    'Nacharbeitsgrund',
     ...dimensions.map((d) => d.name),
     'Notiz',
   ];
-  const rows = [...entries]
-    .filter((e) => !e.deletedAt)
-    .sort((a, b) => a.startAt - b.startAt)
-    .map((e) => {
-      const end = e.endAt ?? now;
-      const article = e.articleId ? articlesById.get(e.articleId) : undefined;
+  const rows = [...live]
+    .sort((a, b) => a.startedAt - b.startedAt)
+    .map((j) => {
+      const t = jobTimes(j, entries, now);
+      const article = j.articleId ? articlesById.get(j.articleId) : undefined;
+      const rework =
+        j.kind === 'order'
+          ? live
+              .filter((r) => r.kind === 'rework' && r.parentJobId === j.id)
+              .reduce((sum, r) => sum + jobTimes(r, entries, now).workMs, 0)
+          : 0;
+      const end = j.finishedAt;
       const dimCols = dimensions.map((d) =>
-        e.valueIds
+        j.valueIds
           .map((id) => valuesById.get(id))
           .filter((v): v is DimensionValue => v?.dimensionId === d.id)
           .map((v) => v.name)
           .join(', '),
       );
       return [
-        format(e.startAt, 'dd.MM.yyyy'),
-        format(e.startAt, 'HH:mm'),
-        e.endAt === null ? '' : format(end, 'dd.MM.yyyy') === format(e.startAt, 'dd.MM.yyyy') ? format(end, 'HH:mm') : format(end, 'dd.MM.yyyy HH:mm'),
-        toHours(end - e.startAt).toFixed(2).replace('.', ','),
+        j.kind === 'rework' ? 'Nacharbeit' : 'Auftrag',
+        format(t.firstStart, 'dd.MM.yyyy'),
+        format(t.firstStart, 'HH:mm'),
+        end === null
+          ? ''
+          : format(end, 'dd.MM.yyyy') === format(t.firstStart, 'dd.MM.yyyy')
+            ? format(end, 'HH:mm')
+            : format(end, 'dd.MM.yyyy HH:mm'),
+        j.orderNo ?? '',
         article?.number ?? '',
         article?.name ?? '',
-        e.orderNo ?? '',
-        e.quantity == null ? '' : String(e.quantity),
+        j.quantity == null ? '' : String(j.quantity),
+        hours(t.workMs),
+        hours(t.totalMs),
+        rework > 0 ? hours(rework) : '',
+        j.reworkReason ?? '',
         ...dimCols,
-        e.note,
+        j.note,
       ];
     });
   return [header, ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n');

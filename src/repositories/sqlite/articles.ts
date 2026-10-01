@@ -93,7 +93,7 @@ export class SqliteArticleRepository implements ArticleRepository {
     const now = Date.now();
     await this.db.withTransactionAsync(async () => {
       await this.db.runAsync('UPDATE articles SET deleted_at = ?, updated_at = ? WHERE id = ?', now, now, id);
-      await this.db.runAsync('UPDATE entries SET article_id = NULL, updated_at = ? WHERE article_id = ?', now, id);
+      await this.db.runAsync('UPDATE jobs SET article_id = NULL, updated_at = ? WHERE article_id = ?', now, id);
     });
   }
 }
