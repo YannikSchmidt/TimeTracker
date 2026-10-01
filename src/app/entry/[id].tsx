@@ -1,0 +1,83 @@
+import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { DateTimeField } from '../../components/DateTimeField';
+import { Button, Card } from '../../components/ui';
+import { useData, useQuery } from '../../data/DataProvider';
+import { formatDuration } from '../../domain/time';
+import { spacing, usePalette } from '../../theme';
+
+/** Einen Arbeitsabschnitt (Start/Ende) korrigieren oder löschen. */
+export default function EntryScreen() {
+  const p = usePalette();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { mutate } = useData();
+  const { data: entry } = useQuery((r) => r.entries.get(id), [id]);
+
+  const [startAt, setStartAt] = useState(0);
+  const [endAt, setEndAt] = useState<number | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  if (entry && !loaded) {
+    setStartAt(entry.startAt);
+    setEndAt(entry.endAt);
+    setLoaded(true);
+  }
+  if (!loaded) return null;
+
+  const running = endAt === null;
+  const invalid = !running && endAt <= startAt;
+
+  const save = async () => {
+    try {
+      await mutate((r) => r.entries.update(id, { startAt, endAt }));
+      router.back();
+    } catch (e) {
+      setError(`Speichern nicht möglich: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const remove = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    await mutate((r) => r.entries.remove(id));
+    router.back();
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Card>
+        <DateTimeField label="Start" value={startAt} onChange={setStartAt} />
+        {running ? (
+          <Text style={{ color: p.success, paddingVertical: spacing.sm }}>Läuft gerade</Text>
+        ) : (
+          <DateTimeField label="Ende" value={endAt} onChange={setEndAt} />
+        )}
+        <Text style={[styles.duration, { color: invalid ? p.danger : p.muted }]}>
+          {invalid ? 'Ende muss nach dem Start liegen' : running ? '' : `Dauer: ${formatDuration(endAt - startAt)}`}
+        </Text>
+      </Card>
+      {error && <Text style={{ color: p.danger }}>{error}</Text>}
+      <Button title="Speichern" icon="checkmark" onPress={() => void save()} disabled={invalid} />
+      <View style={{ gap: spacing.sm }}>
+        <Button
+          title={confirmDelete ? 'Wirklich löschen?' : 'Abschnitt löschen'}
+          icon="trash-outline"
+          variant={confirmDelete ? 'danger' : 'secondary'}
+          onPress={() => void remove()}
+        />
+        {confirmDelete && <Button title="Abbrechen" variant="secondary" onPress={() => setConfirmDelete(false)} />}
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { padding: spacing.lg, gap: spacing.lg },
+  duration: { marginTop: spacing.sm, textAlign: 'right' },
+});

@@ -1,0 +1,111 @@
+import type { BackupData, LegacyBackupData } from '../domain/legacy';
+import type { Article, Dimension, DimensionValue, Entry, Job, JobFields, JobKind, Millis, Settings } from '../domain/types';
+
+export type { BackupData, LegacyBackupData };
+
+/**
+ * Datenzugriff der App. Die UI kennt nur diese Interfaces – eine spätere
+ * Server-/Sync-Implementierung kann die SQLite-Variante ersetzen oder ergänzen.
+ */
+
+export interface JobStartInput extends Partial<JobFields> {
+  kind?: JobKind;
+  parentJobId?: string | null;
+}
+
+/**
+ * Aufträge und Nacharbeiten. Es läuft immer höchstens einer: Starten oder Fortsetzen
+ * pausiert automatisch den laufenden.
+ */
+export interface JobRepository {
+  /** Offene (laufende + pausierte) Aufträge, laufender zuerst, dann zuletzt gestartete. */
+  listOpen(): Promise<Job[]>;
+  listAll(): Promise<Job[]>;
+  get(id: string): Promise<Job | null>;
+  start(input: JobStartInput): Promise<Job>;
+  pause(id: string): Promise<void>;
+  resume(id: string): Promise<void>;
+  /** Beendet den Auftrag (laufender Abschnitt wird geschlossen). */
+  finish(id: string, extra?: { reworkReason?: string | null }): Promise<void>;
+  /** Abgeschlossenen Auftrag wieder öffnen (pausiert). */
+  reopen(id: string): Promise<void>;
+  update(id: string, fields: Partial<JobFields>): Promise<void>;
+  /** Löscht den Auftrag samt Abschnitten und zugehörigen Nacharbeiten. */
+  remove(id: string): Promise<void>;
+  /** Abgeschlossenen Auftrag nachträglich erfassen. */
+  createManual(input: JobStartInput, startAt: Millis, endAt: Millis): Promise<Job>;
+}
+
+/** Arbeitsabschnitte (Zeitspannen) der Aufträge. */
+export interface EntryRepository {
+  /** Abschnitte, die den Zeitraum [start, end) überlappen (inkl. laufender). */
+  listInRange(start: Millis, end: Millis): Promise<Entry[]>;
+  listAll(): Promise<Entry[]>;
+  get(id: string): Promise<Entry | null>;
+  update(id: string, input: { startAt?: Millis; endAt?: Millis | null }): Promise<void>;
+  remove(id: string): Promise<void>;
+}
+
+export interface DimensionRepository {
+  listDimensions(): Promise<Dimension[]>;
+  listValues(): Promise<DimensionValue[]>;
+  createDimension(input: { name: string; multi: boolean }): Promise<Dimension>;
+  updateDimension(id: string, input: Partial<Pick<Dimension, 'name' | 'enabled' | 'multi'>>): Promise<void>;
+  createValue(input: { dimensionId: string; name: string; color: string }): Promise<DimensionValue>;
+  updateValue(id: string, input: Partial<Pick<DimensionValue, 'name' | 'color' | 'archived'>>): Promise<void>;
+}
+
+export interface ArticleInput {
+  number: string;
+  /** Benennung */
+  name: string;
+  /** Endgerät (Notiz) */
+  device: string;
+}
+
+export interface ArticleRepository {
+  list(): Promise<Article[]>;
+  get(id: string): Promise<Article | null>;
+  /** Sucht exakt nach Artikelnummer (ohne führende/folgende Leerzeichen). */
+  findByNumber(number: string): Promise<Article | null>;
+  /** Wirft einen Fehler, wenn die Nummer leer ist oder schon existiert. */
+  create(input: ArticleInput): Promise<Article>;
+  update(id: string, input: Partial<ArticleInput>): Promise<void>;
+  /** Löscht den Artikel; Aufträge verlieren die Zuordnung. */
+  remove(id: string): Promise<void>;
+}
+
+export interface SettingsRepository {
+  get(): Promise<Settings>;
+  set(input: Partial<Settings>): Promise<void>;
+}
+
+export interface Repositories {
+  jobs: JobRepository;
+  entries: EntryRepository;
+  dimensions: DimensionRepository;
+  articles: ArticleRepository;
+  settings: SettingsRepository;
+  exportBackup(): Promise<BackupData>;
+  /** Fügt Daten aus einem Backup ein bzw. überschreibt Datensätze mit gleicher ID. */
+  importBackup(data: BackupData | LegacyBackupData): Promise<void>;
+}
+
+/** Vollständige Job-Felder mit Standardwerten. */
+export function jobFieldsWithDefaults(input: Partial<JobFields>): JobFields {
+  return {
+    articleId: input.articleId ?? null,
+    orderNo: input.orderNo?.trim() || null,
+    quantity: input.quantity ?? null,
+    note: input.note ?? '',
+    valueIds: [...new Set(input.valueIds ?? [])],
+    reworkReason: input.reworkReason?.trim() || null,
+  };
+}
+
+/** Sortierung offener Aufträge: laufender zuerst, dann zuletzt gestartete. */
+export function sortOpenJobs(jobs: Job[]): Job[] {
+  return [...jobs].sort(
+    (a, b) => Number(b.status === 'running') - Number(a.status === 'running') || b.startedAt - a.startedAt,
+  );
+}

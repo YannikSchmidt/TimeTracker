@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "TimeTracker",
+    "slug": "timetracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yannikschmidt.timetracker"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.yannikschmidt.timetracker"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "name": "TimeTracker",
+      "shortName": "TimeTracker",
+      "themeColor": "#2563EB",
+      "backgroundColor": "#F4F5F7",
+      "lang": "de"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-sharing",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Die Kamera wird zum Scannen von Artikel- und Auftragsnummern verwendet.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
+    ],
+    "scheme": "timetracker",
+    "experiments": {
+      "baseUrl": "/TimeTracker"
+    }
+  }
+}
