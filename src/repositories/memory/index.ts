@@ -296,7 +296,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         if (findArticle(number)) throw duplicateArticleError(number);
         const t = now();
         const article: Article = {
-          id: makeId(), number, name: input.name.trim(), description: input.description.trim(),
+          id: makeId(), number, name: input.name.trim(), device: input.device.trim(),
           createdAt: t, updatedAt: t, deletedAt: null, updatedBy: owner(),
         };
         articles.push(article);
@@ -312,7 +312,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         Object.assign(a, {
           number,
           name: (input.name ?? a.name).trim(),
-          description: (input.description ?? a.description).trim(),
+          device: (input.device ?? a.device).trim(),
           updatedAt: now(),
           updatedBy: owner(),
         });

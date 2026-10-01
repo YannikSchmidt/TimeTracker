@@ -13,11 +13,11 @@ import {
 import { DimensionPicker } from '../../components/ValuePicker';
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData } from '../../data/DataProvider';
-import { jobTimes, jobTitle, reworkOf } from '../../domain/jobs';
+import { jobName, jobTimes, reworkOf } from '../../domain/jobs';
 import { reworkReasons } from '../../domain/suggestions';
 import { formatClock, formatDuration, formatTime } from '../../domain/time';
 import type { Job } from '../../domain/types';
-import { useArticles } from '../../hooks/useArticles';
+import { articleLabel, useArticles } from '../../hooks/useArticles';
 import { useDimensions } from '../../hooks/useDimensions';
 import { useJobActions } from '../../hooks/useJobActions';
 import { useNow } from '../../hooks/useNow';
@@ -107,10 +107,11 @@ export default function JobScreen() {
   const reworkMs = reworks.reduce((s, r) => s + r.workMs, 0);
   const parent = job?.parentJobId ? work.all.jobsById.get(job.parentJobId) : undefined;
   const isRework = job?.kind === 'rework';
+  const articleOf = (j: { articleId: string | null }) => (j.articleId ? articles.byId.get(j.articleId) : undefined);
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Stack.Screen options={{ title: isNew ? 'Auftrag nachtragen' : job ? jobTitle(job) : 'Auftrag' }} />
+      <Stack.Screen options={{ title: isNew ? 'Auftrag nachtragen' : job ? jobName(job, articleOf(job)) : 'Auftrag' }} />
 
       {job && times && (
         <Card style={[styles.summary, done === '1' && { borderColor: p.success, borderWidth: 2 }]}>
@@ -124,7 +125,7 @@ export default function JobScreen() {
           </View>
           <Text style={{ color: p.muted, fontSize: 12 }}>
             {formatTime(times.firstStart)} – {job.finishedAt ? formatTime(job.finishedAt) : job.status === 'running' ? 'läuft' : 'pausiert'}
-            {parent ? `  ·  Nacharbeit zu ${jobTitle(parent)}` : ''}
+            {parent ? `  ·  Nacharbeit zu ${jobName(parent, articleOf(parent))}` : ''}
           </Text>
           {readOnly ? (
             <Text style={[styles.owner, { color: p.muted, backgroundColor: p.track }]}>
@@ -154,7 +155,8 @@ export default function JobScreen() {
       {readOnly && job && (
         <Card style={{ gap: spacing.sm }}>
           <InfoRow label="Auftrag" value={job.orderNo ?? '–'} />
-          <InfoRow label="Artikel" value={job.articleId ? (articles.byId.get(job.articleId)?.number ?? '–') : '–'} />
+          <InfoRow label="Artikel" value={articleOf(job) ? articleLabel(articleOf(job)!) : '–'} />
+          {articleOf(job)?.device ? <InfoRow label="Endgerät" value={articleOf(job)!.device} /> : null}
           {!isRework && <InfoRow label="Stückzahl" value={job.quantity == null ? '–' : String(job.quantity)} />}
           {isRework && <InfoRow label="Grund" value={job.reworkReason ?? '–'} />}
           {job.note ? <InfoRow label="Notiz" value={job.note} /> : null}

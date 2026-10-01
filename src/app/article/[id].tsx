@@ -17,7 +17,7 @@ export default function ArticleScreen() {
 
   const [number, setNumber] = useState('');
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const [device, setDevice] = useState('');
   const [loaded, setLoaded] = useState(isNew);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -25,13 +25,13 @@ export default function ArticleScreen() {
   if (article && !loaded) {
     setNumber(article.number);
     setName(article.name);
-    setDescription(article.description);
+    setDevice(article.device);
     setLoaded(true);
   }
 
   const save = async () => {
     try {
-      const input = { number, name, description };
+      const input = { number, name, device };
       await mutate(async (r) => {
         if (isNew) await r.articles.create(input);
         else await r.articles.update(id, input);
@@ -80,25 +80,28 @@ export default function ArticleScreen() {
           </View>
         </View>
         <View>
-          <SectionTitle>Name</SectionTitle>
+          <SectionTitle>Benennung</SectionTitle>
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder="Kurzname, z.B. Halter links"
+            placeholder="z.B. Halter links"
             placeholderTextColor={p.muted}
-            accessibilityLabel="Name"
+            accessibilityLabel="Benennung"
             style={inputStyle}
           />
+          <Text style={{ color: p.muted, fontSize: 12, marginTop: 4 }}>
+            Erscheint im Timer-Namen und kann beim Start statt der Nummer gesucht werden.
+          </Text>
         </View>
         <View>
-          <SectionTitle>Bezeichnung</SectionTitle>
+          <SectionTitle>Endgerät</SectionTitle>
           <TextInput
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Optional: Material, Ausführung, …"
+            value={device}
+            onChangeText={setDevice}
+            placeholder="Notiz, z.B. Gerät/Baugruppe, in die der Artikel eingebaut wird"
             placeholderTextColor={p.muted}
             multiline
-            accessibilityLabel="Bezeichnung"
+            accessibilityLabel="Endgerät"
             style={[inputStyle, { minHeight: 80, textAlignVertical: 'top', paddingTop: spacing.md }]}
           />
         </View>

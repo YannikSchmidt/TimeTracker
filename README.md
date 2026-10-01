@@ -24,7 +24,9 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
   Pausen und die Nacharbeit.
 - **Verlauf**: Aufträge nach Tag mit Arbeitszeit, Gesamtzeit und Nacharbeit; Arbeitsabschnitte einzeln korrigierbar,
   Aufträge nachtragbar.
-- **Artikel**: eigener Tab mit Suche, Scan, Nummer, Name und Bezeichnung.
+- **Artikel**: eigener Tab mit Suche, Scan, Nummer, Benennung und Endgerät (freie Notiz). Beim Start lässt sich
+  der Artikel auch über die Benennung suchen.
+- **Timer-Namen** aus Auftragsnummer und Benennung, z.B. „A-2026-0815 · Halter links“.
 - **Statistik** (Woche/Monat/Jahr): Arbeitszeit inkl. Anteil Nacharbeit, Soll/Ist, Aufträge, Verteilung nach
   Artikel/Auftrag/Merkmal, Artikel & Stückzahlen (Zeit, Nacharbeit, Stück, Min/Stück), Nacharbeit nach Grund, Verlauf.
 - **Team-Sync** (Web-App): verschlüsselt (AES-256, Team-Passwort) über ein privates GitHub-Repo; persönlicher Token

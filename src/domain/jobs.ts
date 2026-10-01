@@ -1,5 +1,5 @@
 import { effectiveEnd } from './time';
-import type { Entry, Job, Millis, Segment } from './types';
+import type { Article, Entry, Job, Millis, Segment } from './types';
 
 /** Abschnitte gruppiert nach Auftrag (gelöschte ausgelassen). */
 export function entriesByJob(entries: Entry[]): Map<string, Entry[]> {
@@ -71,8 +71,22 @@ export function reworkOf(jobId: string, jobs: Job[], entries: Entry[], now: Mill
     .map((job) => ({ job, workMs: jobTimes(job, entries, now).workMs }));
 }
 
-/** Kurztitel eines Auftrags für Listen. */
+/** Kurztitel eines Auftrags ohne Artikel (z.B. für Texte, in denen der Artikel schon steht). */
 export function jobTitle(job: Pick<Job, 'orderNo' | 'kind'>): string {
   if (job.kind === 'rework') return job.orderNo ? `Nacharbeit · Auftrag ${job.orderNo}` : 'Nacharbeit';
   return job.orderNo ? `Auftrag ${job.orderNo}` : 'Ohne Auftragsnummer';
+}
+
+/**
+ * Name eines Timers: Auftragsnummer und Benennung des Artikels, z.B. „A-2026-0815 · Halter links“.
+ * Ohne Benennung wird die Artikelnummer genommen; Nacharbeit bekommt „Nacharbeit · “ davor.
+ */
+export function jobName(
+  job: Pick<Job, 'orderNo' | 'kind'>,
+  article?: Pick<Article, 'number' | 'name'> | null,
+): string {
+  const articlePart = article ? article.name.trim() || article.number : '';
+  const parts = [job.orderNo, articlePart].filter((s): s is string => !!s);
+  if (job.kind === 'rework') return ['Nacharbeit', ...parts].join(' · ');
+  return parts.length ? parts.join(' · ') : 'Ohne Auftragsnummer';
 }

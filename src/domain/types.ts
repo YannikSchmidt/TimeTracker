@@ -60,9 +60,12 @@ export interface Article extends SyncMeta {
   id: string;
   /** Artikelnummer (wie auf dem Barcode) */
   number: string;
+  /** Benennung */
   name: string;
-  /** Bezeichnung */
-  description: string;
+  /** Endgerät – freie Notiz, wofür/wo der Artikel verwendet wird */
+  device: string;
+  /** Veraltet: frühere „Bezeichnung“, wird beim Laden in die Benennung übernommen */
+  description?: string;
   /** Wer den Artikel zuletzt geändert hat (Team-Sync) */
   updatedBy?: string | null;
 }

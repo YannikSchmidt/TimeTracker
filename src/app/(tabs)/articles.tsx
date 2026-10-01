@@ -47,7 +47,7 @@ export default function ArticlesScreen() {
       return;
     }
     try {
-      const created = await mutate((r) => r.articles.create({ number: code, name: '', description: '' }));
+      const created = await mutate((r) => r.articles.create({ number: code, name: '', device: '' }));
       router.push(`/article/${created.id}`);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : String(e));
@@ -62,7 +62,7 @@ export default function ArticlesScreen() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Nummer, Name oder Bezeichnung"
+            placeholder="Nummer, Benennung oder Endgerät"
             placeholderTextColor={p.muted}
             accessibilityLabel="Artikel suchen"
             autoCorrect={false}
@@ -99,13 +99,13 @@ export default function ArticlesScreen() {
               style={({ pressed }) => [styles.row, { backgroundColor: p.card, opacity: pressed ? 0.7 : 1 }]}
             >
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={{ color: p.text, fontWeight: '700', fontSize: 16 }}>
-                  {item.number}
-                  {item.name ? <Text style={{ fontWeight: '400' }}>{`  ${item.name}`}</Text> : null}
+                <Text style={{ color: p.text, fontWeight: '700', fontSize: 16 }} numberOfLines={1}>
+                  {item.name || item.number}
                 </Text>
-                {item.description ? (
+                {item.name ? <Text style={{ color: p.muted }}>{item.number}</Text> : null}
+                {item.device ? (
                   <Text style={{ color: p.muted }} numberOfLines={2}>
-                    {item.description}
+                    <Ionicons name="hardware-chip-outline" size={13} color={p.muted} /> {item.device}
                   </Text>
                 ) : null}
                 <Text style={{ color: p.muted, fontSize: 12 }}>

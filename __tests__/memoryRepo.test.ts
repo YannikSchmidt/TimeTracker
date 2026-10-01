@@ -131,13 +131,13 @@ it('Backup-Import: Merkmale per key, Artikel per Nummer, nur ein laufender', asy
   const source = setup();
   const [project] = await source.repos.dimensions.listDimensions();
   const v = await source.repos.dimensions.createValue({ dimensionId: project.id, name: 'P', color: '#000' });
-  const a = await source.repos.articles.create({ number: '4711', name: 'Halter', description: '' });
+  const a = await source.repos.articles.create({ number: '4711', name: 'Halter', device: '' });
   await source.repos.jobs.start({ valueIds: [v.id], articleId: a.id });
   const backup = await source.repos.exportBackup();
 
   let n = 0;
   const target = createMemoryRepositories({ makeId: () => `t${++n}` });
-  const local = await target.articles.create({ number: '4711', name: 'Lokal', description: '' });
+  const local = await target.articles.create({ number: '4711', name: 'Lokal', device: '' });
   const own = await target.jobs.start({});
   await target.importBackup(backup);
   const dims = await target.dimensions.listDimensions();
@@ -151,9 +151,9 @@ it('Backup-Import: Merkmale per key, Artikel per Nummer, nur ein laufender', asy
 
 it('Artikel: anlegen, Duplikate, Löschen entfernt Zuordnung', async () => {
   const { repos } = setup();
-  const a = await repos.articles.create({ number: ' 4711 ', name: 'Halter', description: 'Stahl' });
+  const a = await repos.articles.create({ number: ' 4711 ', name: 'Halter', device: 'Pumpe P3' });
   expect(a.number).toBe('4711');
-  await expect(repos.articles.create({ number: '4711', name: '', description: '' })).rejects.toThrow('gibt es bereits');
+  await expect(repos.articles.create({ number: '4711', name: '', device: '' })).rejects.toThrow('gibt es bereits');
   const j = await repos.jobs.start({ articleId: a.id });
   await repos.articles.remove(a.id);
   expect((await repos.jobs.get(j.id))?.articleId).toBeNull();

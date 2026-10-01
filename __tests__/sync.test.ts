@@ -87,7 +87,7 @@ describe('Sync-Engine', () => {
     const anna = await device('anna', files, key, clock);
     const ben = await device('ben', files, key, clock);
 
-    const art = await anna.repos.articles.create({ number: '4711', name: 'Halter', description: '' });
+    const art = await anna.repos.articles.create({ number: '4711', name: 'Halter', device: '' });
     const job = await anna.repos.jobs.start({ orderNo: 'A-1', articleId: art.id, quantity: 24 });
     await anna.engine.sync();
 
@@ -136,7 +136,7 @@ describe('Sync-Engine', () => {
     const files = new Map<string, RemoteFile>();
     const clock = { t: 1_000 };
     const anna = await device('anna', files, key, clock);
-    await anna.repos.articles.create({ number: '1', name: '', description: '' });
+    await anna.repos.articles.create({ number: '1', name: '', device: '' });
     // Zwischen Lesen und Schreiben schreibt „jemand anderes“ shared.enc
     const origWrite = anna.remote.write.bind(anna.remote);
     let injected = false;
@@ -145,7 +145,7 @@ describe('Sync-Engine', () => {
         injected = true;
         const other = await encryptJson(key, {
           version: 1,
-          articles: [{ id: 'x', number: '2', name: '', description: '', ...meta, updatedAt: 5 }],
+          articles: [{ id: 'x', number: '2', name: '', device: '', ...meta, updatedAt: 5 }],
           dimensions: [],
           values: [],
         });

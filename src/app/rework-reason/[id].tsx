@@ -4,9 +4,10 @@ import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button, Chip, SectionTitle } from '../../components/ui';
 import { useData } from '../../data/DataProvider';
-import { jobTimes } from '../../domain/jobs';
+import { jobName, jobTimes } from '../../domain/jobs';
 import { reworkReasons } from '../../domain/suggestions';
 import { formatDuration } from '../../domain/time';
+import { useArticles } from '../../hooks/useArticles';
 import { useNow } from '../../hooks/useNow';
 import { useWork } from '../../hooks/useWork';
 import { radius, spacing, usePalette } from '../../theme';
@@ -17,6 +18,7 @@ export default function ReworkReasonScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { mutate } = useData();
   const work = useWork();
+  const articles = useArticles();
   const [reason, setReason] = useState('');
   const now = useNow(1000);
   const job = work.jobsById.get(id);
@@ -35,7 +37,7 @@ export default function ReworkReasonScreen() {
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <Text style={[styles.title, { color: p.text }]}>Grund der Nacharbeit</Text>
       <Text style={{ color: p.muted }}>
-        {job?.orderNo ? `Auftrag ${job.orderNo} · ` : ''}Nacharbeit {formatDuration(workMs)}
+        {job ? `${jobName(job, job.articleId ? articles.byId.get(job.articleId) : null)} · ` : ''}{formatDuration(workMs)}
       </Text>
 
       {suggestions.length > 0 && (

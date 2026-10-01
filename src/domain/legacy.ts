@@ -63,11 +63,28 @@ export function legacyEntryToJob(e: LegacyEntry): { job: Job; entry: Entry } {
   };
 }
 
+/**
+ * Artikel auf das aktuelle Format bringen: frühere Felder Name + Bezeichnung werden zur Benennung,
+ * das Endgerät ist leer, falls noch nicht vorhanden. Unveränderte Artikel werden unverändert zurückgegeben.
+ */
+export function normalizeArticle(a: Article): Article {
+  const legacy = (a.description ?? '').trim();
+  if (!legacy && typeof a.device === 'string' && a.description === undefined) return a;
+  const name = a.name.trim();
+  const merged = !legacy || legacy === name ? name : name ? `${name} – ${legacy}` : legacy;
+  const { description: _old, ...rest } = a;
+  return { ...rest, name: merged, device: typeof a.device === 'string' ? a.device : '' };
+}
+
 /** Bringt ein Backup bzw. einen gespeicherten Stand beliebiger Version auf Version 2. */
 export function upgradeBackup(data: BackupData | LegacyBackupData): BackupData {
   if (data?.version === 2) {
     if (!Array.isArray(data.jobs) || !Array.isArray(data.entries)) throw new Error('Unbekanntes Backup-Format.');
-    return { ...data, jobs: data.jobs.map((j) => ({ ...j, createdBy: j.createdBy ?? null })) };
+    return {
+      ...data,
+      jobs: data.jobs.map((j) => ({ ...j, createdBy: j.createdBy ?? null })),
+      articles: (data.articles ?? []).map(normalizeArticle),
+    };
   }
   if (data?.version !== 1 || !Array.isArray(data.entries)) throw new Error('Unbekanntes Backup-Format.');
   const converted = data.entries.map(legacyEntryToJob);
@@ -78,7 +95,7 @@ export function upgradeBackup(data: BackupData | LegacyBackupData): BackupData {
     entries: converted.map((c) => c.entry),
     dimensions: data.dimensions ?? [],
     values: data.values ?? [],
-    articles: data.articles ?? [],
+    articles: (data.articles ?? []).map(normalizeArticle),
     settings: data.settings,
   };
 }

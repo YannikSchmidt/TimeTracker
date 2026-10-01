@@ -3,21 +3,21 @@ import { useImperativeHandle, useState, type Ref } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useData } from '../data/DataProvider';
-import { articleLabel, matchArticles, type ArticlesData } from '../hooks/useArticles';
+import { articleLabel, findArticleByName, matchArticles, type ArticlesData } from '../hooks/useArticles';
 import { radius, spacing, usePalette } from '../theme';
 import { ScanButton } from './ScanButton';
 import { Button } from './ui';
 
 export interface ArticleFieldHandle {
   /**
-   * Übernimmt getippten Text. true = erledigt (leer oder bekannter Artikel),
-   * false = unbekannte Nummer, Rückfrage wird angezeigt.
+   * Übernimmt getippten Text. true = erledigt (leer oder bekannter Artikel per Nummer oder Benennung),
+   * false = nichts gefunden, Rückfrage wird angezeigt.
    */
   commit(): Promise<boolean>;
 }
 
 /**
- * Artikelnummer eingeben, aus Vorschlägen wählen oder scannen.
+ * Artikel per Nummer oder Benennung suchen, aus Vorschlägen wählen oder scannen.
  * Gescannte unbekannte Nummern werden sofort angelegt, getippte erst nach Rückfrage.
  */
 export function ArticleField({
@@ -49,7 +49,7 @@ export function ArticleField({
 
   const create = async (number: string) => {
     try {
-      const article = await mutate((r) => r.articles.create({ number, name: '', description: '' }));
+      const article = await mutate((r) => r.articles.create({ number, name: '', device: '' }));
       select(article.id);
       return true;
     } catch (e) {
@@ -63,7 +63,7 @@ export function ArticleField({
   const commit = async () => {
     const number = text.trim();
     if (!number) return true;
-    const found = findExact(number);
+    const found = findExact(number) ?? findArticleByName(articles.articles, number);
     if (found) {
       select(found.id);
       return true;
@@ -85,7 +85,7 @@ export function ArticleField({
         <Ionicons name="cube-outline" size={22} color={p.primary} />
         <View style={{ flex: 1 }}>
           <Text style={[styles.selectedNumber, { color: p.text }]}>{articleLabel(selected)}</Text>
-          {selected.description ? <Text style={{ color: p.muted }}>{selected.description}</Text> : null}
+          {selected.device ? <Text style={{ color: p.muted }}>Endgerät: {selected.device}</Text> : null}
         </View>
         <Pressable
           accessibilityRole="button"
@@ -116,18 +116,26 @@ export function ArticleField({
             setError(null);
           }}
           onSubmitEditing={() => void commit()}
-          placeholder="Artikelnummer"
+          placeholder="Artikelnummer oder Benennung"
           placeholderTextColor={p.muted}
-          autoCapitalize="characters"
+          autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="done"
-          accessibilityLabel="Artikelnummer"
+          accessibilityLabel="Artikelnummer oder Benennung"
           style={[styles.input, { color: p.text, borderColor: p.border, backgroundColor: p.card }]}
         />
         <ScanButton label="Artikelnummer scannen" onScan={onScan} />
       </View>
 
-      {unknown ? (
+      {unknown && !looksLikeNumber(unknown) ? (
+        <View style={[styles.warn, { borderColor: p.danger, backgroundColor: p.danger + '12' }]}>
+          <Text style={{ color: p.text }}>
+            Kein Artikel mit der Benennung <Text style={{ fontWeight: '700' }}>{unknown}</Text>. Bitte einen Vorschlag
+            wählen oder die Artikelnummer eingeben.
+          </Text>
+          <Button title="Korrigieren" variant="secondary" onPress={() => setUnknown(null)} />
+        </View>
+      ) : unknown ? (
         <View style={[styles.warn, { borderColor: p.danger, backgroundColor: p.danger + '12' }]}>
           <Text style={{ color: p.text }}>
             Artikel <Text style={{ fontWeight: '700' }}>{unknown}</Text> ist nicht in der Liste. Vertippt?
@@ -151,9 +159,11 @@ export function ArticleField({
                 onPress={() => select(a.id)}
                 style={({ pressed }) => [styles.suggestion, { backgroundColor: pressed ? p.track : 'transparent' }]}
               >
-                <Text style={{ color: p.text, fontWeight: '600' }}>{a.number}</Text>
-                <Text style={{ color: p.muted, flex: 1 }} numberOfLines={1}>
-                  {[a.name, a.description].filter(Boolean).join(' · ')}
+                <Text style={{ color: p.text, fontWeight: '600' }} numberOfLines={1}>
+                  {a.name || a.number}
+                </Text>
+                <Text style={{ color: p.muted, fontSize: 13 }} numberOfLines={1}>
+                  {[a.name ? a.number : '', a.device].filter(Boolean).join(' · ')}
                 </Text>
               </Pressable>
             ))}
@@ -163,6 +173,11 @@ export function ArticleField({
       {error && <Text style={{ color: p.danger }}>{error}</Text>}
     </View>
   );
+}
+
+/** Getippter Text sieht wie eine Artikelnummer aus (Ziffern, keine Leerzeichen) → Anlegen anbieten. */
+function looksLikeNumber(text: string): boolean {
+  return /\d/.test(text) && !/\s/.test(text.trim());
 }
 
 /** Auftragsnummer eingeben oder scannen. */
@@ -248,7 +263,7 @@ const styles = StyleSheet.create({
   warn: { borderWidth: 1, borderRadius: radius.md, padding: spacing.md, gap: spacing.md },
   warnButtons: { flexDirection: 'row', gap: spacing.sm },
   suggestions: { borderWidth: 1, borderRadius: radius.md, overflow: 'hidden' },
-  suggestion: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+  suggestion: { gap: 2, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, justifyContent: 'center' },
   qtyButton: { width: 56, height: 56, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   qtyInput: { width: 110, height: 56, borderWidth: 1, borderRadius: radius.md, textAlign: 'center', fontSize: 28, fontWeight: '700' },

@@ -2,10 +2,10 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { jobTimes, jobTitle } from '../domain/jobs';
+import { jobName, jobTimes } from '../domain/jobs';
 import { formatDuration, formatTime } from '../domain/time';
 import type { Article, Entry, Job } from '../domain/types';
-import { articleLabel } from '../hooks/useArticles';
+import { articleDetails } from '../hooks/useArticles';
 import { spacing, usePalette } from '../theme';
 
 /** Kompakte Zeile für Verlauf/Abgeschlossen: Arbeitszeit fett, Gesamtzeit klein. */
@@ -33,7 +33,7 @@ export function JobRow({
   const rework = job.kind === 'rework';
   const open = job.status !== 'done';
   const details = [
-    article ? articleLabel(article) : '',
+    ...(article ? articleDetails(article) : []),
     job.quantity != null ? `${job.quantity} Stk` : '',
     rework && job.reworkReason ? `Grund: ${job.reworkReason}` : '',
   ].filter(Boolean);
@@ -49,7 +49,7 @@ export function JobRow({
       <View style={[styles.bar, { backgroundColor: rework ? p.warning : open ? p.success : p.primary }]} />
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
         <Text style={{ color: p.text, fontWeight: '600' }} numberOfLines={1}>
-          {jobTitle(job)}
+          {jobName(job, article)}
         </Text>
         <Text style={{ color: p.muted, fontSize: 13 }} numberOfLines={1}>
           {[timeRange, ...details].join('  ·  ')}

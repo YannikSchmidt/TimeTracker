@@ -86,7 +86,7 @@ export default function StartScreen() {
     const found = articles.articles.find((a) => a.number === code);
     if (found) return chooseArticle(found.id);
     try {
-      const created = await mutate((r) => r.articles.create({ number: code, name: '', description: '' }));
+      const created = await mutate((r) => r.articles.create({ number: code, name: '', device: '' }));
       chooseArticle(created.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -186,7 +186,7 @@ export default function StartScreen() {
                   .map((id) => articles.byId.get(id))
                   .filter((a) => !!a)
                   .map((a) => (
-                    <Chip key={a!.id} label={articleLabel(a!)} onPress={() => chooseArticle(a!.id)} />
+                    <Chip key={a!.id} label={a!.name || a!.number} onPress={() => chooseArticle(a!.id)} />
                   ))}
               </View>
             </View>
@@ -218,7 +218,7 @@ export default function StartScreen() {
           ) : (
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
-                <Button title="Eintippen" variant="secondary" icon="keypad-outline" onPress={() => setTyping(true)} />
+                <Button title="Suchen" variant="secondary" icon="search" onPress={() => setTyping(true)} />
               </View>
               <View style={{ flex: 1 }}>
                 <Button title="Ohne Artikel" variant="secondary" onPress={() => chooseArticle(null)} />

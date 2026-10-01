@@ -148,6 +148,21 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       UPDATE entries SET job_id = id;
     `);
   },
+
+  // v4: Artikel: Name + Bezeichnung werden zur Benennung, neues Feld Endgerät (Notiz).
+  async (db) => {
+    await db.execAsync(`
+      ALTER TABLE articles ADD COLUMN device TEXT NOT NULL DEFAULT '';
+      UPDATE articles SET
+        name = CASE
+          WHEN trim(name) = '' THEN trim(description)
+          WHEN trim(description) = trim(name) THEN trim(name)
+          ELSE trim(name) || ' – ' || trim(description)
+        END,
+        description = ''
+      WHERE trim(description) <> '';
+    `);
+  },
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

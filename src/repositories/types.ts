@@ -57,8 +57,10 @@ export interface DimensionRepository {
 
 export interface ArticleInput {
   number: string;
+  /** Benennung */
   name: string;
-  description: string;
+  /** Endgerät (Notiz) */
+  device: string;
 }
 
 export interface ArticleRepository {

@@ -1,4 +1,4 @@
-import type { BackupData } from './legacy';
+import { normalizeArticle, type BackupData } from './legacy';
 import type { Article, Dimension, DimensionValue, Entry, Job, Millis, Settings } from './types';
 
 interface Versioned {
@@ -189,7 +189,10 @@ export function mergeShared(local: SharedData, remote: SharedData | null, base: 
  * Standard-Merkmale (Projekt, Tags, …) können auf verschiedenen Geräten mit unterschiedlichen IDs
  * entstanden sein. Pro key bleibt genau eines (feste ID `dim-<key>` bzw. das älteste); Werte werden umgehängt.
  */
-export function normalizeShared(shared: SharedData): SharedData {
+export function normalizeShared(input: SharedData): SharedData {
+  const shared = input.articles.some((a) => normalizeArticle(a) !== a)
+    ? { ...input, articles: input.articles.map(normalizeArticle) }
+    : input;
   const keep = new Map<string, Dimension>();
   for (const d of shared.dimensions) {
     if (d.key.startsWith('custom_') || d.deletedAt) continue;

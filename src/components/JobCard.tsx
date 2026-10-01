@@ -2,10 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { jobTimes, jobTitle } from '../domain/jobs';
+import { jobName, jobTimes } from '../domain/jobs';
 import { formatClock, formatDuration } from '../domain/time';
 import type { Article, Entry, Job } from '../domain/types';
-import { articleLabel } from '../hooks/useArticles';
+import { articleDetails } from '../hooks/useArticles';
 import { useJobActions } from '../hooks/useJobActions';
 import { radius, spacing, usePalette } from '../theme';
 import { Button } from './ui';
@@ -28,7 +28,8 @@ export function JobCard({
   const running = job.status === 'running';
   const rework = job.kind === 'rework';
   const accent = rework ? p.warning : running ? p.success : p.muted;
-  const details = [article ? articleLabel(article) : '', job.quantity != null ? `${job.quantity} Stk` : '']
+  const name = jobName(job, article);
+  const details = [...(article ? articleDetails(article) : []), job.quantity != null ? `${job.quantity} Stk` : '']
     .filter(Boolean)
     .join(' · ');
 
@@ -41,7 +42,7 @@ export function JobCard({
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${jobTitle(job)} öffnen`}
+        accessibilityLabel={`${name} öffnen`}
         onPress={() => router.push(`/job/${job.id}`)}
         style={styles.body}
       >
@@ -56,7 +57,7 @@ export function JobCard({
           <Ionicons name="chevron-forward" size={18} color={p.muted} />
         </View>
         <Text style={[styles.title, { color: p.text }]} numberOfLines={1}>
-          {jobTitle(job)}
+          {name}
         </Text>
         {details ? (
           <Text style={{ color: p.muted }} numberOfLines={1}>
@@ -71,19 +72,19 @@ export function JobCard({
       <View style={styles.buttons}>
         <View style={{ flex: 2 }}>
           {running ? (
-            <Button title="Pause" icon="pause" variant="secondary" size="large" onPress={() => void actions.pause(job)} accessibilityLabel={`${jobTitle(job)} pausieren`} />
+            <Button title="Pause" icon="pause" variant="secondary" size="large" onPress={() => void actions.pause(job)} accessibilityLabel={`${name} pausieren`} />
           ) : (
-            <Button title="Weiter" icon="play" variant="success" size="large" onPress={() => void actions.resume(job)} accessibilityLabel={`${jobTitle(job)} fortsetzen`} />
+            <Button title="Weiter" icon="play" variant="success" size="large" onPress={() => void actions.resume(job)} accessibilityLabel={`${name} fortsetzen`} />
           )}
         </View>
         <View style={{ flex: 1.4 }}>
-          <Button title="Fertig" icon="checkmark" variant={rework ? 'warning' : 'primary'} size="large" onPress={() => void actions.finish(job)} accessibilityLabel={`${jobTitle(job)} beenden`} />
+          <Button title="Fertig" icon="checkmark" variant={rework ? 'warning' : 'primary'} size="large" onPress={() => void actions.finish(job)} accessibilityLabel={`${name} beenden`} />
         </View>
       </View>
       {!rework && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Nacharbeit zu ${jobTitle(job)} starten`}
+          accessibilityLabel={`Nacharbeit zu ${name} starten`}
           onPress={() => void actions.startRework(job)}
           style={styles.reworkLink}
         >
