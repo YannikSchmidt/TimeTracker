@@ -1,16 +1,17 @@
-import { getDocumentAsync } from 'expo-document-picker';
-import { File, Paths } from 'expo-file-system';
-import { isAvailableAsync, shareAsync } from 'expo-sharing';
 import { format } from 'date-fns';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { SyncBadge } from '../../components/SyncBadge';
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
 import { jobsToCsv } from '../../domain/export';
 import type { Dimension } from '../../domain/types';
 import { useDimensions, type DimensionsData } from '../../hooks/useDimensions';
+import { pickTextFile, shareTextFile } from '../../lib/files';
 import type { BackupData } from '../../repositories/types';
+import { useTeam } from '../../sync/TeamContext';
 import { radius, spacing, usePalette, VALUE_COLORS } from '../../theme';
 
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
@@ -24,6 +25,8 @@ export default function SettingsScreen() {
   const [newDimName, setNewDimName] = useState('');
   const [newDimMulti, setNewDimMulti] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const team = useTeam();
 
   const [hoursFor, setHoursFor] = useState<number | null>(null);
   if (settings && settings.weeklyTargetHours !== hoursFor) {
@@ -71,37 +74,25 @@ export default function SettingsScreen() {
     setNewDimMulti(false);
   };
 
-  const shareFile = async (name: string, content: string, mimeType: string) => {
-    const file = new File(Paths.cache, name);
-    if (file.exists) file.delete();
-    file.create();
-    file.write(content);
-    if (await isAvailableAsync()) {
-      await shareAsync(file.uri, { mimeType, dialogTitle: name });
-    } else {
-      setStatus(`Datei gespeichert unter: ${file.uri}`);
-    }
-  };
-
   const stamp = () => format(Date.now(), 'yyyy-MM-dd');
 
   const exportCsv = async () => {
     const [jobs, entries, articles] = await Promise.all([repos.jobs.listAll(), repos.entries.listAll(), repos.articles.list()]);
     // BOM, damit Excel Umlaute korrekt erkennt
     const csv = '\uFEFF' + jobsToCsv(jobs, entries, dims.dimensions, dims.values, articles, Date.now());
-    await shareFile(`auftraege-${stamp()}.csv`, csv, 'text/csv');
+    setStatus(await shareTextFile(`auftraege-${stamp()}.csv`, csv, 'text/csv'));
   };
 
   const exportJson = async () => {
     const backup = await repos.exportBackup();
-    await shareFile(`timetracker-backup-${stamp()}.json`, JSON.stringify(backup, null, 2), 'application/json');
+    setStatus(await shareTextFile(`timetracker-backup-${stamp()}.json`, JSON.stringify(backup, null, 2), 'application/json'));
   };
 
   const importJson = async () => {
-    const result = await getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true });
-    if (result.canceled || !result.assets?.[0]) return;
+    const text = await pickTextFile();
+    if (text === null) return;
     try {
-      const data = JSON.parse(await new File(result.assets[0].uri).text()) as BackupData;
+      const data = JSON.parse(text) as BackupData;
       await mutate((r) => r.importBackup(data));
       setStatus('Import abgeschlossen.');
     } catch (e) {
@@ -172,24 +163,61 @@ export default function SettingsScreen() {
         <Button title="Hinzufügen" icon="add" variant="secondary" onPress={addDimension} disabled={!newDimName.trim()} />
       </Card>
 
+      {team.available && (
+        <>
+          <SectionTitle>Team-Sync</SectionTitle>
+          <Card style={{ gap: spacing.md }}>
+            {team.connected ? (
+              <>
+                <Text style={{ color: p.text }}>
+                  Verbunden als <Text style={{ fontWeight: '700' }}>{team.name ?? team.login}</Text> ({team.login}) mit{' '}
+                  {team.repo}
+                </Text>
+                <SyncBadge />
+                {team.others.length > 0 && (
+                  <Text style={{ color: p.muted, fontSize: 12 }}>Im Team: {team.others.map((o) => o.login).join(', ')}</Text>
+                )}
+                <Button title="Jetzt synchronisieren" icon="sync-outline" variant="secondary" onPress={team.syncNow} />
+                <Button
+                  title={confirmLogout ? 'Wirklich abmelden?' : 'Dieses Gerät abmelden'}
+                  icon="log-out-outline"
+                  variant={confirmLogout ? 'danger' : 'secondary'}
+                  onPress={() => {
+                    if (!confirmLogout) return setConfirmLogout(true);
+                    setConfirmLogout(false);
+                    void team.disconnect();
+                  }}
+                />
+                {confirmLogout && (
+                  <Text style={{ color: p.muted, fontSize: 12 }}>
+                    Token und Schlüssel werden von diesem Gerät gelöscht. Die Daten bleiben verschlüsselt im Daten-Repo.
+                  </Text>
+                )}
+              </>
+            ) : (
+              <>
+                <Text style={{ color: p.muted }}>
+                  Nicht verbunden – die Daten liegen nur auf diesem Gerät.
+                </Text>
+                <Button title="Team-Sync einrichten" icon="cloud-outline" onPress={() => router.push('/connect')} />
+              </>
+            )}
+          </Card>
+        </>
+      )}
+
       <SectionTitle>Daten</SectionTitle>
       <Card style={{ gap: spacing.md }}>
-        {Platform.OS === 'web' ? (
-          <Text style={{ color: p.text }}>
-            Dies ist die Browser-Vorschau. Export und Backup gibt es in der Handy-App.
-          </Text>
-        ) : (
-          <>
-            <Button title="Als CSV exportieren (Excel)" icon="document-text-outline" variant="secondary" onPress={exportCsv} />
-            <Button title="Backup exportieren (JSON)" icon="cloud-download-outline" variant="secondary" onPress={exportJson} />
-            <Button title="Backup importieren" icon="cloud-upload-outline" variant="secondary" onPress={importJson} />
-          </>
-        )}
+        <Button title="Als CSV exportieren (Excel)" icon="document-text-outline" variant="secondary" onPress={exportCsv} />
+        <Button title="Backup exportieren (JSON)" icon="cloud-download-outline" variant="secondary" onPress={exportJson} />
+        <Button title="Backup importieren" icon="cloud-upload-outline" variant="secondary" onPress={importJson} />
         {status && <Text style={{ color: p.text }}>{status}</Text>}
         <Text style={{ color: p.muted, fontSize: 12 }}>
-          {Platform.OS === 'web'
-            ? 'Alle Daten bleiben nur in diesem Browser gespeichert.'
-            : 'Alle Daten werden nur lokal auf diesem Gerät gespeichert.'}
+          {team.connected
+            ? 'Daten werden auf diesem Gerät gespeichert und verschlüsselt mit dem Team abgeglichen.'
+            : Platform.OS === 'web'
+              ? 'Alle Daten bleiben nur in diesem Browser gespeichert.'
+              : 'Alle Daten werden nur lokal auf diesem Gerät gespeichert.'}
         </Text>
       </Card>
     </ScrollView>

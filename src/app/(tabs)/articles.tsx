@@ -26,11 +26,11 @@ export default function ArticlesScreen() {
   // Nutzung je Artikel: Anzahl Aufträge und Arbeitszeit (ohne Nacharbeit)
   const usage = useMemo(() => {
     const map = new Map<string, { count: number; ms: number }>();
-    for (const j of work.jobs) {
+    for (const j of work.all.jobs) {
       if (!j.articleId || j.kind !== 'order') continue;
       const u = map.get(j.articleId) ?? { count: 0, ms: 0 };
       u.count++;
-      u.ms += jobTimes(j, work.entriesOf.get(j.id) ?? [], now).workMs;
+      u.ms += jobTimes(j, work.all.entriesOf.get(j.id) ?? [], now).workMs;
       map.set(j.articleId, u);
     }
     return map;
@@ -91,7 +91,7 @@ export default function ArticlesScreen() {
         }
         renderItem={({ item }) => {
           const u = usage.get(item.id);
-          const qty = suggestQuantity(work.jobs, item.id, 0);
+          const qty = suggestQuantity(work.all.jobs, item.id, 0);
           return (
             <Pressable
               accessibilityRole="button"

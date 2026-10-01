@@ -16,6 +16,7 @@ export function JobRow({
   reworkMs = 0,
   now,
   right,
+  owner,
 }: {
   job: Job;
   entries: Entry[];
@@ -24,6 +25,8 @@ export function JobRow({
   reworkMs?: number;
   now: number;
   right?: ReactNode;
+  /** Besitzer anzeigen (Team-Ansicht) */
+  owner?: string | null;
 }) {
   const p = usePalette();
   const t = jobTimes(job, entries, now);
@@ -34,6 +37,7 @@ export function JobRow({
     job.quantity != null ? `${job.quantity} Stk` : '',
     rework && job.reworkReason ? `Grund: ${job.reworkReason}` : '',
   ].filter(Boolean);
+  if (owner) details.unshift(owner);
   const timeRange = `${formatTime(t.firstStart)} – ${open ? (job.status === 'running' ? 'läuft' : 'pausiert') : formatTime(job.finishedAt!)}`;
 
   return (

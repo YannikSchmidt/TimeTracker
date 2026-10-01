@@ -38,7 +38,8 @@ export default function JobScreen() {
   const actions = useJobActions();
   const now = useNow(1000);
   const articleRef = useRef<ArticleFieldHandle>(null);
-  const job = isNew ? undefined : work.jobsById.get(id);
+  const job = isNew ? undefined : work.all.jobsById.get(id);
+  const readOnly = !!job && !work.isOwn(job);
 
   // Formularzustand
   const [loaded, setLoaded] = useState(isNew);
@@ -100,11 +101,11 @@ export default function JobScreen() {
     router.back();
   };
 
-  const entries = job ? (work.entriesOf.get(job.id) ?? []) : [];
+  const entries = job ? (work.all.entriesOf.get(job.id) ?? []) : [];
   const times = job ? jobTimes(job, entries, now) : null;
-  const reworks = job ? reworkOf(job.id, work.jobs, work.entries, now) : [];
+  const reworks = job ? reworkOf(job.id, work.all.jobs, work.all.entries, now) : [];
   const reworkMs = reworks.reduce((s, r) => s + r.workMs, 0);
-  const parent = job?.parentJobId ? work.jobsById.get(job.parentJobId) : undefined;
+  const parent = job?.parentJobId ? work.all.jobsById.get(job.parentJobId) : undefined;
   const isRework = job?.kind === 'rework';
 
   return (
@@ -125,7 +126,13 @@ export default function JobScreen() {
             {formatTime(times.firstStart)} – {job.finishedAt ? formatTime(job.finishedAt) : job.status === 'running' ? 'läuft' : 'pausiert'}
             {parent ? `  ·  Nacharbeit zu ${jobTitle(parent)}` : ''}
           </Text>
-          <JobButtons job={job} actions={actions} onReopen={() => mutate((r) => r.jobs.reopen(job.id))} />
+          {readOnly ? (
+            <Text style={[styles.owner, { color: p.muted, backgroundColor: p.track }]}>
+              Auftrag von {job.createdBy ?? 'einer anderen Person'} – nur lesbar
+            </Text>
+          ) : (
+            <JobButtons job={job} actions={actions} onReopen={() => mutate((r) => r.jobs.reopen(job.id))} />
+          )}
           {done === '1' && <Button title="Fertig" variant="secondary" onPress={() => router.back()} />}
         </Card>
       )}
@@ -144,69 +151,89 @@ export default function JobScreen() {
         </Card>
       )}
 
-      <Card style={{ gap: spacing.lg }}>
-        {isNew && (
-          <View>
-            <DateTimeField label="Start" value={startAt} onChange={setStartAt} />
-            <DateTimeField label="Ende" value={endAt} onChange={setEndAt} />
-          </View>
-        )}
-        <View>
-          <SectionTitle>Auftrag</SectionTitle>
-          <OrderField value={orderNo} onChange={setOrderNo} />
-        </View>
-        <View>
-          <SectionTitle>Artikel</SectionTitle>
-          <ArticleField ref={articleRef} articles={articles} value={articleId} onChange={setArticleId} />
-        </View>
-        {!isRework && (
-          <View>
-            <SectionTitle>Stückzahl</SectionTitle>
-            <QuantityField value={quantity} onChange={setQuantity} />
-          </View>
-        )}
-        {isRework && (
-          <View style={{ gap: spacing.sm }}>
-            <SectionTitle>Grund der Nacharbeit</SectionTitle>
-            <TextInput
-              value={reason}
-              onChangeText={setReason}
-              placeholder="Grund"
-              placeholderTextColor={p.muted}
-              accessibilityLabel="Grund der Nacharbeit"
-              style={[styles.input, { color: p.text, borderColor: p.border }]}
-            />
-            <View style={styles.chips}>
-              {reworkReasons(work.jobs).map((s) => (
-                <Chip key={s} label={s} selected={s === reason.trim()} onPress={() => setReason(s)} />
-              ))}
-            </View>
-          </View>
-        )}
-        <DimensionPicker dims={dims} selected={valueIds} onChange={setValueIds} />
-        <View>
-          <SectionTitle>Notiz</SectionTitle>
-          <TextInput
-            value={note}
-            onChangeText={setNote}
-            placeholder="Optional"
-            placeholderTextColor={p.muted}
-            multiline
-            accessibilityLabel="Notiz"
-            style={[styles.input, { color: p.text, borderColor: p.border, minHeight: 60 }]}
-          />
-        </View>
-      </Card>
+      {readOnly && job && (
+        <Card style={{ gap: spacing.sm }}>
+          <InfoRow label="Auftrag" value={job.orderNo ?? '–'} />
+          <InfoRow label="Artikel" value={job.articleId ? (articles.byId.get(job.articleId)?.number ?? '–') : '–'} />
+          {!isRework && <InfoRow label="Stückzahl" value={job.quantity == null ? '–' : String(job.quantity)} />}
+          {isRework && <InfoRow label="Grund" value={job.reworkReason ?? '–'} />}
+          {job.note ? <InfoRow label="Notiz" value={job.note} /> : null}
+        </Card>
+      )}
 
-      {error && <Text style={{ color: p.danger }}>{error}</Text>}
-      {saved && <Text style={{ color: p.success }}>Gespeichert.</Text>}
-      <Button title={isNew ? 'Nachtragen' : 'Änderungen speichern'} icon="checkmark" onPress={() => void save()} disabled={isNew && endAt <= startAt} />
+      {!readOnly && (
+        <>
+          <Card style={{ gap: spacing.lg }}>
+            {isNew && (
+              <View>
+                <DateTimeField label="Start" value={startAt} onChange={setStartAt} />
+                <DateTimeField label="Ende" value={endAt} onChange={setEndAt} />
+              </View>
+            )}
+            <View>
+              <SectionTitle>Auftrag</SectionTitle>
+              <OrderField value={orderNo} onChange={setOrderNo} />
+            </View>
+            <View>
+              <SectionTitle>Artikel</SectionTitle>
+              <ArticleField ref={articleRef} articles={articles} value={articleId} onChange={setArticleId} />
+            </View>
+            {!isRework && (
+              <View>
+                <SectionTitle>Stückzahl</SectionTitle>
+                <QuantityField value={quantity} onChange={setQuantity} />
+              </View>
+            )}
+            {isRework && (
+              <View style={{ gap: spacing.sm }}>
+                <SectionTitle>Grund der Nacharbeit</SectionTitle>
+                <TextInput
+                  value={reason}
+                  onChangeText={setReason}
+                  placeholder="Grund"
+                  placeholderTextColor={p.muted}
+                  accessibilityLabel="Grund der Nacharbeit"
+                  style={[styles.input, { color: p.text, borderColor: p.border }]}
+                />
+                <View style={styles.chips}>
+                  {reworkReasons(work.all.jobs).map((s) => (
+                    <Chip key={s} label={s} selected={s === reason.trim()} onPress={() => setReason(s)} />
+                  ))}
+                </View>
+              </View>
+            )}
+            <DimensionPicker dims={dims} selected={valueIds} onChange={setValueIds} />
+            <View>
+              <SectionTitle>Notiz</SectionTitle>
+              <TextInput
+                value={note}
+                onChangeText={setNote}
+                placeholder="Optional"
+                placeholderTextColor={p.muted}
+                multiline
+                accessibilityLabel="Notiz"
+                style={[styles.input, { color: p.text, borderColor: p.border, minHeight: 60 }]}
+              />
+            </View>
+          </Card>
+
+          {error && <Text style={{ color: p.danger }}>{error}</Text>}
+          {saved && <Text style={{ color: p.success }}>Gespeichert.</Text>}
+          <Button title={isNew ? 'Nachtragen' : 'Änderungen speichern'} icon="checkmark" onPress={() => void save()} disabled={isNew && endAt <= startAt} />
+        </>
+      )}
 
       {job && entries.length > 0 && (
         <Card style={{ gap: spacing.xs }}>
           <SectionTitle>Arbeitsabschnitte ({entries.length})</SectionTitle>
           {entries.map((e) => (
-            <Pressable key={e.id} accessibilityRole="button" onPress={() => router.push(`/entry/${e.id}`)} style={styles.listRow}>
+            <Pressable
+              key={e.id}
+              accessibilityRole="button"
+              disabled={readOnly}
+              onPress={() => router.push(`/entry/${e.id}`)}
+              style={styles.listRow}
+            >
               <Text style={{ color: p.text, flex: 1 }}>
                 {formatTime(e.startAt)} – {e.endAt ? formatTime(e.endAt) : 'läuft'}
               </Text>
@@ -216,7 +243,7 @@ export default function JobScreen() {
         </Card>
       )}
 
-      {job && (
+      {job && !readOnly && (
         <View style={{ gap: spacing.sm }}>
           <Button
             title={confirmDelete ? 'Wirklich löschen?' : 'Auftrag löschen'}
@@ -275,6 +302,16 @@ function JobButtons({
   );
 }
 
+function InfoRow({ label, value }: { label: string; value: string }) {
+  const p = usePalette();
+  return (
+    <View style={styles.listRow}>
+      <Text style={{ color: p.muted, width: 80 }}>{label}</Text>
+      <Text style={{ color: p.text, fontWeight: '600', flex: 1 }}>{value}</Text>
+    </View>
+  );
+}
+
 function Stat({ label, value, hint, color }: { label: string; value: string; hint?: string; color?: string }) {
   const p = usePalette();
   return (
@@ -290,6 +327,7 @@ const styles = StyleSheet.create({
   container: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xl * 2 },
   summary: { gap: spacing.sm },
   doneBadge: { fontWeight: '800', fontSize: 16 },
+  owner: { padding: spacing.sm, borderRadius: radius.sm, overflow: 'hidden', marginTop: spacing.sm },
   bigTime: { fontSize: 52, fontWeight: '300', fontVariant: ['tabular-nums'] },
   statRow: { flexDirection: 'row', gap: spacing.md },
   buttonRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },

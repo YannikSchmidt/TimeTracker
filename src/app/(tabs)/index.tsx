@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { JobCard } from '../../components/JobCard';
 import { JobRow } from '../../components/JobRow';
+import { SyncBadge, SyncSetupHint } from '../../components/SyncBadge';
 import { Empty, SectionTitle } from '../../components/ui';
 import { reworkOf } from '../../domain/jobs';
 import { totalMs } from '../../domain/stats';
@@ -47,6 +48,8 @@ export default function TimerScreen() {
         </View>
       </Pressable>
 
+      <SyncSetupHint />
+      <SyncBadge />
       <Text style={{ color: p.muted, textAlign: 'center' }}>
         Heute gearbeitet: <Text style={{ color: p.text, fontWeight: '700' }}>{formatDuration(todayMs)}</Text>
       </Text>

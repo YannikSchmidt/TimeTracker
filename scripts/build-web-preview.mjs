@@ -19,11 +19,11 @@ let js = bundles.map((f) => readFileSync(join(jsDir, f), 'utf8')).join('\n;\n');
 
 // Nur tatsächlich genutzte Assets einbetten: Ionicons (Tab-Icons) und die kleinen Router-PNGs.
 const MIME = { '.ttf': 'font/ttf', '.png': 'image/png' };
-const assetPaths = [...new Set(js.match(/"\/assets\/[^"]+"/g) ?? [])].map((s) => s.slice(1, -1));
+const assetPaths = [...new Set(js.match(/"(?:\/TimeTracker)?\/assets\/[^"]+"/g) ?? [])].map((s) => s.slice(1, -1));
 let inlined = 0;
 for (const path of assetPaths) {
   if (extname(path) === '.ttf' && !path.includes('/Ionicons.')) continue;
-  const data = readFileSync(join(dist, path)).toString('base64');
+  const data = readFileSync(join(dist, path.replace(/^\/TimeTracker/, ''))).toString('base64');
   js = js.split(`"${path}"`).join(`"data:${MIME[extname(path)]};base64,${data}"`);
   inlined++;
 }

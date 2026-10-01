@@ -6,11 +6,14 @@ import { radius, spacing } from '../theme';
 import { BARCODE_TYPES } from './ScanButton';
 import { Button } from './ui';
 
+/** onScan kann false liefern, um den Code zu ignorieren und weiter zu scannen. */
+export type ScanHandler = (code: string) => boolean | void;
+
 /**
  * Eingebetteter Live-Scanner: Kamera läuft sofort, der erste erkannte Code wird gemeldet.
  * Für jeden neuen Scan-Schritt neu einhängen (key wechseln).
  */
-export function ScannerView({ hint, onScan }: { hint: string; onScan: (code: string) => void }) {
+export function ScannerView({ hint, onScan }: { hint: string; onScan: ScanHandler }) {
   const [permission, requestPermission] = useCameraPermissions();
   const handled = useRef(false);
 
@@ -32,7 +35,10 @@ export function ScannerView({ hint, onScan }: { hint: string; onScan: (code: str
         onBarcodeScanned={({ data }) => {
           if (handled.current || !data?.trim()) return;
           handled.current = true;
-          onScan(data.trim());
+          if (onScan(data.trim()) === false) {
+            // ignoriert (z.B. derselbe Code wie eben) → kurz warten, dann weiter scannen
+            setTimeout(() => (handled.current = false), 1200);
+          }
         }}
       />
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}>

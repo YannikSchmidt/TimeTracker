@@ -39,12 +39,12 @@ export default function StartScreen() {
   const [starting, setStarting] = useState(false);
 
   const goConfirm = (order: string | null, article: string | null) => {
-    const last = order ? lastJobForOrder(work.jobs, order) : null;
+    const last = order ? lastJobForOrder(work.all.jobs, order) : null;
     if (last?.quantity != null && last.articleId === article) {
       setQuantity(String(last.quantity));
       setQuantityHint(`wie beim letzten Mal bei Auftrag ${order}`);
     } else {
-      const s = suggestQuantity(work.jobs, article, work.settings.defaultQuantity);
+      const s = suggestQuantity(work.all.jobs, article, work.settings.defaultQuantity);
       setQuantity(String(s.quantity));
       setQuantityHint(s.source === 'history' ? 'häufigste Stückzahl dieses Artikels' : 'Standard-Stückzahl');
     }
@@ -56,7 +56,7 @@ export default function StartScreen() {
     const order = value?.trim() || null;
     setOrderNo(order);
     // Bekannter Auftrag → Artikel übernehmen und direkt zur Bestätigung
-    const last = order ? lastJobForOrder(work.jobs, order) : null;
+    const last = order ? lastJobForOrder(work.all.jobs, order) : null;
     if (last?.articleId && articles.byId.has(last.articleId)) {
       setArticleId(last.articleId);
       goConfirm(order, last.articleId);
@@ -69,6 +69,16 @@ export default function StartScreen() {
   const chooseArticle = (id: string | null) => {
     setArticleId(id);
     goConfirm(orderNo, id);
+  };
+
+  /** Im Artikel-Schritt: noch sichtbaren Auftrags-Code ignorieren und weiter scannen. */
+  const onArticleScanned = (code: string) => {
+    if (orderNo && code === orderNo) {
+      setError('Das ist der Auftrags-Code – bitte jetzt den Artikel-Code scannen.');
+      return false;
+    }
+    void onArticleScan(code);
+    return true;
   };
 
   const onArticleScan = async (code: string) => {
@@ -97,7 +107,7 @@ export default function StartScreen() {
 
   const article = articleId ? articles.byId.get(articleId) : undefined;
   const orderMatches = typedOrder.trim()
-    ? knownOrders(work.jobs).filter((o) => o.toLowerCase().includes(typedOrder.trim().toLowerCase())).slice(0, 6)
+    ? knownOrders(work.all.jobs).filter((o) => o.toLowerCase().includes(typedOrder.trim().toLowerCase())).slice(0, 6)
     : [];
 
   return (
@@ -115,11 +125,11 @@ export default function StartScreen() {
         <>
           <Text style={[styles.title, { color: p.text }]}>Auftrag scannen</Text>
           {!typing && <ScannerView key="order" hint="Auftrags-Code scannen" onScan={chooseOrder} />}
-          {recentOrders(work.jobs).length > 0 && !typing && (
+          {recentOrders(work.all.jobs).length > 0 && !typing && (
             <View>
               <SectionTitle>Zuletzt</SectionTitle>
               <View style={styles.chips}>
-                {recentOrders(work.jobs).map((o) => (
+                {recentOrders(work.all.jobs).map((o) => (
                   <Chip key={o} label={o} onPress={() => chooseOrder(o)} />
                 ))}
               </View>
@@ -167,12 +177,12 @@ export default function StartScreen() {
         <>
           <Text style={[styles.title, { color: p.text }]}>Artikel scannen</Text>
           {orderNo && <Text style={{ color: p.muted }}>Auftrag {orderNo} ist neu – welcher Artikel?</Text>}
-          {!typing && <ScannerView key="article" hint="Artikel-Code scannen" onScan={(c) => void onArticleScan(c)} />}
-          {frequentArticles(work.jobs).length > 0 && !typing && (
+          {!typing && <ScannerView key="article" hint="Artikel-Code scannen" onScan={onArticleScanned} />}
+          {frequentArticles(work.all.jobs).length > 0 && !typing && (
             <View>
               <SectionTitle>Häufig</SectionTitle>
               <View style={styles.chips}>
-                {frequentArticles(work.jobs)
+                {frequentArticles(work.all.jobs)
                   .map((id) => articles.byId.get(id))
                   .filter((a) => !!a)
                   .map((a) => (

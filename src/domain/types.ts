@@ -36,6 +36,8 @@ export interface Job extends JobFields, SyncMeta {
   startedAt: Millis;
   /** Zeitpunkt des Abschlusses; null = offen */
   finishedAt: Millis | null;
+  /** GitHub-Login der Person, der der Auftrag gehört (null = lokal, ohne Team-Sync) */
+  createdBy: string | null;
 }
 
 /** Ein Arbeitsabschnitt eines Auftrags (zwischen Start/Fortsetzen und Pause/Beenden). */
@@ -61,6 +63,8 @@ export interface Article extends SyncMeta {
   name: string;
   /** Bezeichnung */
   description: string;
+  /** Wer den Artikel zuletzt geändert hat (Team-Sync) */
+  updatedBy?: string | null;
 }
 
 /**

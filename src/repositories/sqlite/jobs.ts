@@ -36,6 +36,8 @@ function toJob(row: JobRow, valueIds: string[]): Job {
     parentJobId: row.parent_job_id,
     startedAt: row.started_at,
     finishedAt: row.finished_at,
+    // Die native App speichert nur lokal (ohne Team-Sync)
+    createdBy: null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
@@ -129,6 +131,7 @@ export class SqliteJobRepository implements JobRepository {
       ...fields,
       startedAt,
       finishedAt,
+      createdBy: null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,

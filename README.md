@@ -1,7 +1,13 @@
 # TimeTracker
 
-Mobile App (iOS & Android) zur Zeiterfassung per Start/Stopp mit Statistiken.
-Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript. Alle Daten liegen lokal auf dem Gerät (SQLite).
+Zeiterfassung für Aufträge – als **Web-App (PWA)** für iPhone und Android, ohne App Store:
+**https://yannikschmidt.github.io/TimeTracker/** (→ „Zum Home-Bildschirm“).
+
+Daten liegen lokal auf dem Gerät (offline nutzbar) und werden – wenn eingerichtet – **verschlüsselt** über ein
+privates GitHub-Repo mit dem Team abgeglichen. Einrichtung: **[docs/EINRICHTUNG.md](docs/EINRICHTUNG.md)**.
+
+Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Codebasis läuft auch als native App
+(dort aktuell nur lokal, SQLite).
 
 ## Funktionen
 
@@ -21,9 +27,13 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript. Alle Daten li
 - **Artikel**: eigener Tab mit Suche, Scan, Nummer, Name und Bezeichnung.
 - **Statistik** (Woche/Monat/Jahr): Arbeitszeit inkl. Anteil Nacharbeit, Soll/Ist, Aufträge, Verteilung nach
   Artikel/Auftrag/Merkmal, Artikel & Stückzahlen (Zeit, Nacharbeit, Stück, Min/Stück), Nacharbeit nach Grund, Verlauf.
-- **Einstellungen**: Sollstunden, Arbeitstage, Standard-Stückzahl, Merkmale, CSV-Export pro Auftrag, JSON-Backup.
+- **Team-Sync** (Web-App): verschlüsselt (AES-256, Team-Passwort) über ein privates GitHub-Repo; persönlicher Token
+  pro Person, damit jede Änderung nachvollziehbar ist. Alle sehen alles (Filter *Ich / Person / Alle*),
+  bearbeiten aber nur ihre eigenen Aufträge. Offline nutzbar, Abgleich automatisch.
+- **Scanner**: Live-Kamera (App und Web-App), alternativ per Foto.
+- **Einstellungen**: Sollstunden, Arbeitstage, Standard-Stückzahl, Merkmale, Team-Sync, CSV-Export pro Auftrag, JSON-Backup.
 
-## Auf dem Handy ausprobieren
+## Entwickeln und testen
 
 Voraussetzung: [Node.js](https://nodejs.org) (LTS) auf dem Rechner, die App **Expo Go** auf dem Handy
 ([Android](https://play.google.com/store/apps/details?id=host.exp.exponent) / [iOS](https://apps.apple.com/app/expo-go/id982107779)).
@@ -36,7 +46,16 @@ npx expo start
 Den angezeigten QR-Code mit Expo Go (Android) bzw. der Kamera-App (iPhone) scannen. Handy und Rechner müssen im
 selben WLAN sein – sonst `npx expo start --tunnel` verwenden.
 
-### Ohne Rechner: Browser-Vorschau
+### Web-App lokal
+
+```bash
+npx expo start --web     # Entwicklung im Browser (http://localhost:8081/TimeTracker/)
+npx expo export -p web   # Build wie auf GitHub Pages → dist/
+```
+
+Bei jedem Push auf `main` baut `.github/workflows/pages.yml` die Web-App und veröffentlicht sie auf GitHub Pages.
+
+### Einzelne HTML-Datei (Vorschau)
 
 ```bash
 npm run build:preview   # → dist-preview/timetracker.html (eine Datei, alles eingebettet)
@@ -64,6 +83,7 @@ src/
   components/          UI-Bausteine, Diagramme (react-native-svg), Merkmal-Auswahl, Datum/Uhrzeit
   data/DataProvider    Repositories per Context + useQuery (lädt nach Änderungen automatisch neu)
   db/                  SQLite-Migrationen
+  sync/                Team-Sync: Verschlüsselung, GitHub-Client, Sync-Engine, Einrichtung
   domain/              Reine Logik ohne UI: Zeit, Statistik, CSV-Export (mit Tests)
   repositories/        Interfaces + SQLite-Implementierung
 ```
@@ -74,8 +94,9 @@ src/
   `entries` (Arbeitsabschnitte eines Auftrags: Start, Ende – `NULL` = läuft), `articles`, `dimensions` (Merkmale),
   `dimension_values`, `job_values` (Zuordnung n:m), `settings`.
 - Alle Datensätze haben UUIDs sowie `created_at`, `updated_at` und `deleted_at` (Soft-Delete).
-  Damit kann später ein Server mehrere Geräte über „Änderungen seit `updated_at`“ synchronisieren,
-  ohne ID-Konflikte.
+- Team-Sync (Web): pro Person eine verschlüsselte Datei `people/<login>.enc` (nur sie schreibt),
+  gemeinsame Daten in `shared.enc`. Abgleich per Drei-Wege-Merge pro Feld (Basis = letzter gemeinsamer Stand),
+  Konflikte beim Schreiben werden über die Datei-SHA erkannt und automatisch neu zusammengeführt.
 - Die Screens greifen nur über die Interfaces in `src/repositories/types.ts` auf Daten zu.
   Für einen Server-Sync wird dort eine weitere Implementierung ergänzt, die UI bleibt unverändert.
 - Neue Merkmale (z.B. Person, Auftrag) sind nur Datensätze in `dimensions` – keine Schema-Änderung nötig,

@@ -20,7 +20,7 @@ export default function ReworkReasonScreen() {
   const [reason, setReason] = useState('');
   const now = useNow(1000);
   const job = work.jobsById.get(id);
-  const suggestions = reworkReasons(work.jobs);
+  const suggestions = reworkReasons(work.all.jobs);
 
   const save = async (value: string) => {
     const r = value.trim();

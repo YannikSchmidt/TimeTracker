@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BarChart, DonutChart, ShareList, type ShareDatum } from '../../components/charts';
+import { OwnerFilterBar } from '../../components/OwnerFilterBar';
 import { Card, Chip, Empty, Expandable, Segmented } from '../../components/ui';
 import {
   articleProduction,
@@ -26,7 +27,7 @@ import { formatDuration } from '../../domain/time';
 import { articleLabel, useArticles } from '../../hooks/useArticles';
 import { useDimensions } from '../../hooks/useDimensions';
 import { useNow } from '../../hooks/useNow';
-import { useWork } from '../../hooks/useWork';
+import { useWork, type OwnerFilter } from '../../hooks/useWork';
 import { spacing, usePalette, VALUE_COLORS } from '../../theme';
 
 const PERIODS: { value: PeriodKind; label: string }[] = [
@@ -57,7 +58,9 @@ export default function StatsScreen() {
   const [group, setGroup] = useState<string>('article');
 
   const work = useWork();
-  const entries = work.segments;
+  const [owner, setOwner] = useState<OwnerFilter>('me');
+  const view = work.view(owner);
+  const entries = view.segments;
   const settings = work.settings;
 
   const range = useMemo(() => periodRange(kind, anchor), [kind, anchor]);
@@ -87,15 +90,16 @@ export default function StatsScreen() {
             group === 'order' ? 'Ohne Auftrag' : 'Ohne Artikel',
           ),
       production: articleProduction(entries, range, now),
-      reworkReasons: reworkByReason(entries, work.jobs, range, now),
+      reworkReasons: reworkByReason(entries, view.jobs, range, now),
     };
-  }, [entries, settings, range, kind, now, dimension, dims.values, group, articles.byId, work.jobs]);
+  }, [entries, settings, range, kind, now, dimension, dims.values, group, articles.byId, view.jobs]);
 
   const { kpis } = stats;
   const balancePositive = kpis.balanceMs >= 0;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <OwnerFilterBar others={work.others} value={owner} onChange={setOwner} />
       <Segmented options={PERIODS} value={kind} onChange={setKind} />
 
       <View style={styles.periodRow}>
@@ -118,12 +122,17 @@ export default function StatsScreen() {
           value={formatDuration(kpis.totalMs)}
           hint={kpis.reworkMs > 0 ? `davon Nacharbeit ${formatDuration(kpis.reworkMs)}` : undefined}
         />
-        <Kpi
-          label={balancePositive ? 'Überstunden' : 'Fehlstunden'}
-          value={`${balancePositive ? '+' : ''}${formatDuration(kpis.balanceMs)}`}
-          color={balancePositive ? p.success : p.danger}
-          hint={`Soll ${formatDuration(kpis.targetMs)}`}
-        />
+        {owner === 'me' ? (
+          <Kpi
+            label={balancePositive ? 'Überstunden' : 'Fehlstunden'}
+            value={`${balancePositive ? '+' : ''}${formatDuration(kpis.balanceMs)}`}
+            color={balancePositive ? p.success : p.danger}
+            hint={`Soll ${formatDuration(kpis.targetMs)}`}
+          />
+        ) : (
+          // Sollzeiten anderer Personen sind nicht bekannt
+          <Kpi label="Nacharbeit" value={formatDuration(kpis.reworkMs)} color={kpis.reworkMs > 0 ? p.warning : undefined} />
+        )}
         <Kpi label="Ø pro aktivem Tag" value={formatDuration(kpis.avgPerActiveDayMs)} hint={`${days(kpis.activeDays)} aktiv`} />
         <Kpi label="Aufträge" value={String(kpis.jobCount)} hint={`Serie: ${days(stats.streak)}`} />
       </View>

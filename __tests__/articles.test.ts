@@ -22,6 +22,7 @@ function job(extra: Partial<Job> = {}): Job {
     parentJobId: null,
     startedAt: 0,
     finishedAt: null,
+    createdBy: null,
     ...meta,
     ...extra,
   };

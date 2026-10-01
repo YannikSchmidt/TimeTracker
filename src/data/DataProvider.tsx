@@ -13,8 +13,18 @@ interface DataContextValue {
 const DataContext = createContext<DataContextValue | null>(null);
 
 /** Stellt die Repositories bereit (SQLite nativ, Speicher/localStorage im Browser – siehe StorageRoot). */
-export function DataProvider({ repos, children }: { repos: Repositories; children: ReactNode }) {
+export function DataProvider({
+  repos,
+  subscribe,
+  children,
+}: {
+  repos: Repositories;
+  /** Optional: Änderungen von außen (z.B. Team-Sync) melden → alle Ansichten laden neu */
+  subscribe?: (listener: () => void) => () => void;
+  children: ReactNode;
+}) {
   const [version, setVersion] = useState(0);
+  useEffect(() => subscribe?.(() => setVersion((v) => v + 1)), [subscribe]);
 
   const mutate = useCallback(
     async <T,>(fn: (r: Repositories) => Promise<T>) => {

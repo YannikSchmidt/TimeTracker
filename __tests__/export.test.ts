@@ -7,7 +7,7 @@ const at = (s: string) => new Date(s).getTime();
 function job(extra: Partial<Job>): Job {
   return {
     id: 'x', kind: 'order', status: 'done', articleId: null, orderNo: null, quantity: null, note: '', valueIds: [],
-    reworkReason: null, parentJobId: null, startedAt: 0, finishedAt: null, ...meta, ...extra,
+    reworkReason: null, parentJobId: null, startedAt: 0, finishedAt: null, createdBy: null, ...meta, ...extra,
   };
 }
 

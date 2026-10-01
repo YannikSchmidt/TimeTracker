@@ -25,6 +25,8 @@ export interface BackupData {
   values: DimensionValue[];
   articles: Article[];
   settings: Settings;
+  /** Zeitpunkt der letzten Änderung der Einstellungen (für den Abgleich zwischen Geräten) */
+  settingsUpdatedAt?: Millis;
 }
 
 export interface LegacyBackupData {
@@ -54,6 +56,7 @@ export function legacyEntryToJob(e: LegacyEntry): { job: Job; entry: Entry } {
       parentJobId: null,
       startedAt: e.startAt,
       finishedAt: e.endAt,
+      createdBy: null,
       ...meta,
     },
     entry: { id: e.id, jobId: e.id, startAt: e.startAt, endAt: e.endAt, ...meta },
@@ -64,7 +67,7 @@ export function legacyEntryToJob(e: LegacyEntry): { job: Job; entry: Entry } {
 export function upgradeBackup(data: BackupData | LegacyBackupData): BackupData {
   if (data?.version === 2) {
     if (!Array.isArray(data.jobs) || !Array.isArray(data.entries)) throw new Error('Unbekanntes Backup-Format.');
-    return data;
+    return { ...data, jobs: data.jobs.map((j) => ({ ...j, createdBy: j.createdBy ?? null })) };
   }
   if (data?.version !== 1 || !Array.isArray(data.entries)) throw new Error('Unbekanntes Backup-Format.');
   const converted = data.entries.map(legacyEntryToJob);

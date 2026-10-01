@@ -2,17 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { format, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { router } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 
 import { JobRow } from '../../components/JobRow';
+import { OwnerFilterBar } from '../../components/OwnerFilterBar';
 import { Empty } from '../../components/ui';
 import { dailyTotals } from '../../domain/stats';
 import { dayKey, formatDuration } from '../../domain/time';
 import type { Job } from '../../domain/types';
 import { useArticles } from '../../hooks/useArticles';
 import { useNow } from '../../hooks/useNow';
-import { useWork } from '../../hooks/useWork';
+import { useWork, type OwnerFilter } from '../../hooks/useWork';
 import { spacing, usePalette } from '../../theme';
 
 export default function HistoryScreen() {
@@ -20,31 +21,33 @@ export default function HistoryScreen() {
   const work = useWork();
   const articles = useArticles();
   const now = useNow(30_000);
+  const [filter, setFilter] = useState<OwnerFilter>('me');
+  const view = work.view(filter);
 
   // Aufträge nach Tag des ersten Starts; Nacharbeit erscheint direkt unter ihrem Auftrag
   const sections = useMemo(() => {
     const reworkByParent = new Map<string, Job[]>();
-    for (const j of work.jobs) {
-      if (j.kind === 'rework' && j.parentJobId && work.jobsById.has(j.parentJobId)) {
+    for (const j of view.jobs) {
+      if (j.kind === 'rework' && j.parentJobId && view.jobsById.has(j.parentJobId)) {
         reworkByParent.set(j.parentJobId, [...(reworkByParent.get(j.parentJobId) ?? []), j]);
       }
     }
     const byDay = new Map<string, { dayStart: number; data: Job[] }>();
-    for (const j of [...work.jobs].sort((a, b) => b.startedAt - a.startedAt)) {
-      if (j.kind === 'rework' && j.parentJobId && work.jobsById.has(j.parentJobId)) continue;
+    for (const j of [...view.jobs].sort((a, b) => b.startedAt - a.startedAt)) {
+      if (j.kind === 'rework' && j.parentJobId && view.jobsById.has(j.parentJobId)) continue;
       const key = dayKey(j.startedAt);
       const section = byDay.get(key) ?? { dayStart: startOfDay(j.startedAt).getTime(), data: [] };
       section.data.push(j, ...(reworkByParent.get(j.id) ?? []).sort((a, b) => a.startedAt - b.startedAt));
       byDay.set(key, section);
     }
-    const totals = dailyTotals(work.segments, { start: 0, end: Number.MAX_SAFE_INTEGER }, now);
+    const totals = dailyTotals(view.segments, { start: 0, end: Number.MAX_SAFE_INTEGER }, now);
     return [...byDay.entries()].map(([key, s]) => ({
       key,
       title: format(s.dayStart, 'EEEE, d. MMMM yyyy', { locale: de }),
       total: totals.get(key) ?? 0,
       data: s.data,
     }));
-  }, [work, now]);
+  }, [view, now]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -64,12 +67,14 @@ export default function HistoryScreen() {
           <View style={item.kind === 'rework' && item.parentJobId ? styles.indent : undefined}>
             <JobRow
               job={item}
-              entries={work.entriesOf.get(item.id) ?? []}
+              entries={view.entriesOf.get(item.id) ?? []}
               article={item.articleId ? articles.byId.get(item.articleId) : undefined}
               now={now}
+              owner={filter === 'all' ? work.ownerOf(item) : null}
             />
           </View>
         )}
+        ListHeaderComponent={<OwnerFilterBar others={work.others} value={filter} onChange={setFilter} />}
         ListEmptyComponent={<Empty text={work.loaded ? 'Noch keine Aufträge. Starte im Timer-Tab oder trage Zeit nach.' : 'Lädt …'} />}
       />
       <Pressable

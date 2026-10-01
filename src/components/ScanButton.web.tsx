@@ -1,61 +1,54 @@
 import { Ionicons } from '@expo/vector-icons';
-import { createElement, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { radius, spacing, usePalette } from '../theme';
-import { decodeImage } from './barcode.web';
+import { ScannerView } from './ScannerView';
 
-/**
- * Browser-Version: Live-Kamera ist in eingebetteten Seiten oft gesperrt, Datei-Uploads
- * aber nicht. Der Button öffnet daher die Foto-Aufnahme; das Foto wird ausgewertet.
- */
+/** Kamera-Knopf (Browser): öffnet den Scanner (live oder per Foto) als Overlay. */
 export function ScanButton({ label, onScan }: { label: string; onScan: (code: string) => void }) {
   const p = usePalette();
-  const input = useRef<HTMLInputElement | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const onFile = async (file: File | undefined) => {
-    if (!file) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const code = await decodeImage(file);
-      if (code) onScan(code.trim());
-      else setError('Kein Code erkannt – bitte näher und scharf fotografieren.');
-    } catch {
-      setError('Das Foto konnte nicht gelesen werden.');
-    } finally {
-      setBusy(false);
-      if (input.current) input.current.value = '';
-    }
-  };
+  const [open, setOpen] = useState(false);
 
   return (
     <View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}
-        onPress={() => input.current?.click()}
+        onPress={() => setOpen(true)}
         style={({ pressed }) => [styles.button, { backgroundColor: p.primary, opacity: pressed ? 0.8 : 1 }]}
       >
-        {busy ? <ActivityIndicator color={p.onPrimary} /> : <Ionicons name="scan-outline" size={22} color={p.onPrimary} />}
+        <Ionicons name="scan-outline" size={22} color={p.onPrimary} />
       </Pressable>
-      {createElement('input', {
-        ref: input,
-        type: 'file',
-        accept: 'image/*',
-        capture: 'environment',
-        'aria-label': `${label} (Foto)`,
-        style: { display: 'none' },
-        onChange: (e: { target: HTMLInputElement }) => onFile(e.target.files?.[0]),
-      })}
-      {error && <Text style={[styles.error, { color: p.danger }]}>{error}</Text>}
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <View style={styles.backdrop}>
+          <View style={[styles.sheet, { backgroundColor: p.background }]}>
+            <View style={styles.header}>
+              <Text style={[styles.title, { color: p.text }]}>{label}</Text>
+              <Pressable accessibilityLabel="Scanner schließen" hitSlop={12} onPress={() => setOpen(false)}>
+                <Ionicons name="close" size={26} color={p.text} />
+              </Pressable>
+            </View>
+            {open && (
+              <ScannerView
+                hint={label}
+                onScan={(code) => {
+                  setOpen(false);
+                  onScan(code);
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   button: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  error: { fontSize: 12, marginTop: spacing.xs, maxWidth: 160 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: spacing.lg },
+  sheet: { borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md, maxWidth: 520, width: '100%', alignSelf: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  title: { fontSize: 18, fontWeight: '700' },
 });

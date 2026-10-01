@@ -1,34 +1,50 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 
-import { newId } from '../db/ids';
-import { createMemoryRepositories } from '../repositories/memory';
-import type { BackupData } from '../repositories/types';
+import { TeamContext, type TeamState } from '../sync/TeamContext';
+import { TeamSync } from '../sync/TeamSync.web';
+import { usePalette } from '../theme';
 import { DataProvider } from './DataProvider';
 
-const STORAGE_KEY = 'timetracker:v1';
-
-function load(): BackupData | null {
-  try {
-    const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as BackupData) : null;
-  } catch {
-    return null;
-  }
-}
-
-function save(snapshot: BackupData): void {
-  try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-  } catch {
-    // Speicher blockiert (z.B. privates Fenster) – Daten bleiben bis zum Neuladen erhalten.
-  }
-}
-
 /**
- * Browser-Version: Daten im Speicher, gesichert im localStorage des Browsers.
- * (SQLite im Browser bräuchte spezielle Server-Header, die nicht überall verfügbar sind.)
+ * Browser-Version: Daten lokal in IndexedDB (offline nutzbar) und – wenn verbunden –
+ * verschlüsselter Abgleich mit dem privaten Daten-Repo des Teams.
  */
 export function StorageRoot({ children }: { children: ReactNode }) {
-  const [repos] = useState(() => createMemoryRepositories({ initial: load(), persist: save, makeId: newId }));
-  return <DataProvider repos={repos}>{children}</DataProvider>;
+  const p = usePalette();
+  const [sync, setSync] = useState<TeamSync | null>(null);
+
+  useEffect(() => {
+    void TeamSync.load().then(setSync);
+  }, []);
+
+  if (!sync) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: p.background }}>
+        <ActivityIndicator size="large" color={p.primary} />
+      </View>
+    );
+  }
+  return <SyncedData sync={sync}>{children}</SyncedData>;
+}
+
+function SyncedData({ sync, children }: { sync: TeamSync; children: ReactNode }) {
+  const state = useSyncExternalStore(sync.subscribeState, sync.getState);
+  const team: TeamState = useMemo(
+    () => ({
+      ...state,
+      syncNow: sync.syncNow,
+      connect: sync.connect,
+      disconnect: sync.disconnect,
+      setLocalOnly: sync.setLocalOnly,
+    }),
+    [state, sync],
+  );
+  return (
+    <TeamContext.Provider value={team}>
+      <DataProvider repos={sync.store.repos} subscribe={sync.subscribeData}>
+        {children}
+      </DataProvider>
+    </TeamContext.Provider>
+  );
 }

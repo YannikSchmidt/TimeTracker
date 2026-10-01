@@ -22,7 +22,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "output": "single"
+      "output": "single",
+      "name": "TimeTracker",
+      "shortName": "TimeTracker",
+      "themeColor": "#2563EB",
+      "backgroundColor": "#F4F5F7",
+      "lang": "de"
     },
     "plugins": [
       "expo-router",
@@ -38,6 +43,9 @@
         }
       ]
     ],
-    "scheme": "timetracker"
+    "scheme": "timetracker",
+    "experiments": {
+      "baseUrl": "/TimeTracker"
+    }
   }
 }

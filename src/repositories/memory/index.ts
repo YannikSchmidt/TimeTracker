@@ -20,13 +20,27 @@ export interface MemoryOptions {
   persist?: (snapshot: BackupData) => void;
   makeId: () => string;
   now?: () => Millis;
+  /** GitHub-Login der angemeldeten Person – wird bei neuen Aufträgen/Artikeln eingetragen. */
+  owner?: () => string | null;
+}
+
+/** Zugriff auf den kompletten Stand – für den Team-Sync. */
+export interface MemoryStore {
+  repos: Repositories;
+  snapshot(): BackupData;
+  /** Stand ersetzen (z.B. nach Zusammenführen mit dem Server); ruft persist auf. */
+  replace(data: BackupData): void;
 }
 
 /**
  * Repositories im Speicher – für die Browser-Vorschau (mit localStorage-Persistenz)
  * und für Tests. Gleiches Verhalten wie die SQLite-Variante.
  */
-export function createMemoryRepositories({ initial, persist, makeId, now = Date.now }: MemoryOptions): Repositories {
+export function createMemoryRepositories(options: MemoryOptions): Repositories {
+  return createMemoryStore(options).repos;
+}
+
+export function createMemoryStore({ initial, persist, makeId, now = Date.now, owner = () => null }: MemoryOptions): MemoryStore {
   const start = initial ? upgradeBackup(initial) : null;
   let jobs: Job[] = (start?.jobs ?? []).map(copyJob);
   let entries: Entry[] = (start?.entries ?? []).map((e) => ({ ...e }));
@@ -34,11 +48,12 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
   let values: DimensionValue[] = start?.values.map((v) => ({ ...v })) ?? [];
   let articles: Article[] = start?.articles.map((a) => ({ ...a })) ?? [];
   let settings: Settings = { ...DEFAULT_SETTINGS, ...start?.settings };
+  let settingsUpdatedAt: Millis = start?.settingsUpdatedAt ?? 0;
 
   if (dimensions.length === 0) {
-    const t = now();
     dimensions = DEFAULT_DIMENSIONS.map((d, i) => ({
-      id: makeId(), ...d, sort: i, createdAt: t, updatedAt: t, deletedAt: null,
+      // Feste IDs, damit Standard-Merkmale auf allen Geräten gleich sind (Team-Sync)
+      id: `dim-${d.key}`, ...d, sort: i, createdAt: 0, updatedAt: 0, deletedAt: null,
     }));
   }
   // Wie SQLite-Migration v2: unbenutztes Merkmal „Auftrag“ entfernen (jetzt eigenes Feld).
@@ -58,6 +73,7 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
     values: values.map((v) => ({ ...v })),
     articles: articles.map((a) => ({ ...a })),
     settings: { ...settings, workDays: [...settings.workDays] },
+    settingsUpdatedAt,
   });
   const changed = () => persist?.(snapshot());
   const findArticle = (number: string) => articles.find((a) => a.number === number && !a.deletedAt);
@@ -94,6 +110,7 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
       ...fields,
       startedAt: t,
       finishedAt: null,
+      createdBy: owner(),
       createdAt: t,
       updatedAt: t,
       deletedAt: null,
@@ -280,7 +297,7 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
         const t = now();
         const article: Article = {
           id: makeId(), number, name: input.name.trim(), description: input.description.trim(),
-          createdAt: t, updatedAt: t, deletedAt: null,
+          createdAt: t, updatedAt: t, deletedAt: null, updatedBy: owner(),
         };
         articles.push(article);
         changed();
@@ -297,6 +314,7 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
           name: (input.name ?? a.name).trim(),
           description: (input.description ?? a.description).trim(),
           updatedAt: now(),
+          updatedBy: owner(),
         });
         changed();
       },
@@ -318,6 +336,7 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
       },
       async set(input) {
         settings = { ...settings, ...stripUndefined(input) };
+        settingsUpdatedAt = now();
         changed();
       },
     },
@@ -376,11 +395,25 @@ export function createMemoryRepositories({ initial, persist, makeId, now = Date.
     if (j.status === 'done') j.finishedAt = Math.max(...own.map((e) => e.endAt ?? now()));
   }
 
-  return repos;
+  return {
+    repos,
+    snapshot,
+    replace(data) {
+      const next = upgradeBackup(data);
+      jobs = next.jobs.map(copyJob);
+      entries = next.entries.map((e) => ({ ...e }));
+      dimensions = next.dimensions.map((d) => ({ ...d }));
+      values = next.values.map((v) => ({ ...v }));
+      articles = next.articles.map((a) => ({ ...a }));
+      settings = { ...DEFAULT_SETTINGS, ...next.settings };
+      settingsUpdatedAt = next.settingsUpdatedAt ?? settingsUpdatedAt;
+      changed();
+    },
+  };
 }
 
 function copyJob(j: Job): Job {
-  return { ...j, valueIds: [...(j.valueIds ?? [])] };
+  return { ...j, valueIds: [...(j.valueIds ?? [])], createdBy: j.createdBy ?? null };
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
