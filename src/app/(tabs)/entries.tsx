@@ -70,11 +70,11 @@ export default function HistoryScreen() {
               entries={view.entriesOf.get(item.id) ?? []}
               article={item.articleId ? articles.byId.get(item.articleId) : undefined}
               now={now}
-              owner={filter === 'all' ? work.ownerOf(item) : null}
+              owner={filter === 'all' ? work.nameOf(work.ownerOf(item)) : null}
             />
           </View>
         )}
-        ListHeaderComponent={<OwnerFilterBar others={work.others} value={filter} onChange={setFilter} />}
+        ListHeaderComponent={<OwnerFilterBar others={work.others} nameOf={work.nameOf} value={filter} onChange={setFilter} />}
         ListEmptyComponent={<Empty text={work.loaded ? 'Noch keine Aufträge. Starte im Timer-Tab oder trage Zeit nach.' : 'Lädt …'} />}
       />
       <Pressable

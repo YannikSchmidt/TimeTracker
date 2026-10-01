@@ -21,6 +21,8 @@ export const PATHS = {
 /** Daten einer anderen Person – nur lesbar. */
 export interface TeamMember {
   login: string;
+  /** Anzeigename (aus der Datei der Person, sonst der Login) */
+  name: string;
   jobs: Job[];
   entries: Entry[];
 }
@@ -34,7 +36,10 @@ export interface SyncStatus {
 export interface SyncEngineOptions {
   remote: RemoteStore;
   key: CryptoKey;
+  /** Kennung der Person = Dateiname people/<login>.enc */
   login: string;
+  /** Anzeigename, wird in der eigenen Datei mitgespeichert */
+  name?: string;
   /** Aktueller lokaler Stand */
   getLocal: () => BackupData;
   /** Zusammengeführten Stand lokal übernehmen */
@@ -127,6 +132,12 @@ export class SyncEngine {
     }
   }
 
+  /** Für Commit-Nachrichten: Name und Kennung, damit nachvollziehbar ist, wer etwas geändert hat */
+  private who(): string {
+    const { login, name } = this.o;
+    return name && name !== login ? `${name} (${login})` : login;
+  }
+
   private async syncOnce() {
     const { remote, key, login } = this.o;
     const ownPath = PATHS.person(login);
@@ -134,12 +145,12 @@ export class SyncEngine {
     const remoteOwn = ownFile ? await decryptJson<PersonData>(key, ownFile.text) : null;
     const remoteShared = sharedFile ? await decryptJson<SharedData>(key, sharedFile.text) : null;
 
-    const local = splitSnapshot(this.o.getLocal(), login);
+    const local = splitSnapshot(this.o.getLocal(), login, this.o.name);
     const person = mergePerson(local.person, remoteOwn, this.now(), this.base?.person ?? null);
     const shared = mergeShared(local.shared, remoteShared, this.base?.shared ?? null);
 
     // Lokal übernehmen – dabei Änderungen, die während des Ladens gemacht wurden, erhalten
-    const latest = splitSnapshot(this.o.getLocal(), login);
+    const latest = splitSnapshot(this.o.getLocal(), login, this.o.name);
     const finalPerson = mergePerson(latest.person, person, this.now(), local.person);
     const finalShared = mergeShared(latest.shared, shared, local.shared);
     if (canonical(finalPerson) !== canonical(latest.person) || canonical(finalShared) !== canonical(latest.shared)) {
@@ -149,10 +160,10 @@ export class SyncEngine {
 
     // Hochladen, wenn sich etwas gegenüber dem Server geändert hat
     if (!remoteOwn || canonical(person) !== canonical(remoteOwn)) {
-      await remote.write(ownPath, await encryptJson(key, person), ownFile?.sha ?? null, `${login}: Aufträge aktualisiert`);
+      await remote.write(ownPath, await encryptJson(key, person), ownFile?.sha ?? null, `${this.who()}: Aufträge aktualisiert`);
     }
     if (!remoteShared || canonical(shared) !== canonical(remoteShared)) {
-      await remote.write(PATHS.shared, await encryptJson(key, shared), sharedFile?.sha ?? null, `${login}: Artikel/Merkmale aktualisiert`);
+      await remote.write(PATHS.shared, await encryptJson(key, shared), sharedFile?.sha ?? null, `${this.who()}: Artikel/Merkmale aktualisiert`);
     }
     this.base = { person, shared };
     this.o.saveBase?.(this.base);
@@ -177,6 +188,7 @@ export class SyncEngine {
         sha: file.sha,
         member: {
           login: who,
+          name: data.name?.trim() || who,
           // Ältere Aufträge ohne Besitzer gehören der Person, deren Datei es ist
           jobs: data.jobs.map((j) => ({ ...j, createdBy: j.createdBy ?? who })),
           entries: data.entries,

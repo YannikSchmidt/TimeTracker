@@ -29,6 +29,8 @@ export interface WorkData extends WorkView {
   /** Besitzer eines Auftrags (eigene ohne Login → me) */
   ownerOf: (job: Job) => string | null;
   isOwn: (job: Job) => boolean;
+  /** Anzeigename zu einer Kennung (Login bzw. Name bei Einladung) */
+  nameOf: (login: string | null | undefined) => string;
   view: (filter: OwnerFilter) => WorkView;
 }
 
@@ -62,6 +64,9 @@ export function useWork(): WorkData {
     const me = team.login;
     const isOwn = (job: Job) => ownIds.has(job.id);
     const ownerOf = (job: Job) => (isOwn(job) ? me : job.createdBy);
+    const names = new Map(team.others.map((m) => [m.login, m.name]));
+    if (me) names.set(me, team.name ?? me);
+    const nameOf = (login: string | null | undefined) => (login ? (names.get(login) ?? login) : 'unbekannt');
     const byOwner = new Map(team.others.map((m) => [m.login, makeView(m.jobs.filter((j) => !j.deletedAt), m.entries)]));
     return {
       ...own,
@@ -72,7 +77,8 @@ export function useWork(): WorkData {
       all,
       ownerOf,
       isOwn,
+      nameOf,
       view: (filter: OwnerFilter) => (filter === 'me' ? own : filter === 'all' ? all : (byOwner.get(filter) ?? makeView([], []))),
     };
-  }, [data, team.others, team.login]);
+  }, [data, team.others, team.login, team.name]);
 }

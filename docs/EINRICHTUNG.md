@@ -26,45 +26,60 @@ TimeTracker-Data/TimeTracker-Daten (privat)   meta.json · shared.enc · people/
 2. **Privates Daten-Repo anlegen:** github.com/organizations/TimeTracker-Data/repositories/new →
    Name `TimeTracker-Daten`, **Private**, „Add a README file“ anhaken → *Create repository*.
    (Issues sind bei neuen Repos automatisch eingeschaltet – dort landen die Verbesserungsvorschläge.)
-3. **Mitglieder einladen:** Organisation → *People* → *Invite member*. Jedes Mitglied braucht Schreibrecht auf
-   `TimeTracker-Daten` (z.B. über ein Team oder direkt im Repo unter *Settings* → *Collaborators and teams*).
-4. **Token-Freigabe:** Organisation → *Settings* → *Personal access tokens*. Fine-grained Tokens erlauben; falls
-   „Require approval“ aktiv ist, Anfragen unter *Pending requests* genehmigen.
+3. **Token-Freigabe:** Organisation → *Settings* → *Personal access tokens*. Fine-grained Tokens erlauben; falls
+   „Require approval“ aktiv ist, Anfragen unter *Pending requests* genehmigen (oder die Genehmigung ausschalten).
 
-## 3. Jede Person: persönlicher Token
+## 3. Einmalig: du verbindest dich und legst das Team-Passwort fest
 
-GitHub → *Settings* → *Developer settings* → *Personal access tokens* → **Fine-grained tokens** → *Generate new token*
-(der Link „Token auf GitHub erstellen“ in der App füllt das meiste vor):
+Du (mit GitHub-Konto) brauchst einen **persönlichen Token**: GitHub → *Settings* → *Developer settings* →
+*Personal access tokens* → **Fine-grained tokens** → *Generate new token* (der Link „Token auf GitHub erstellen“ in der
+App füllt das meiste vor):
 
 | Feld | Wert |
 |---|---|
-| Resource owner | die Organisation |
+| Resource owner | **TimeTracker-Data** |
 | Repository access | *Only select repositories* → `TimeTracker-Daten` |
 | Permissions → Repository → **Contents** | **Read and write** (Zeitdaten) |
 | Permissions → Repository → **Issues** | **Read and write** (Verbesserungsvorschläge) |
-| Expiration | z.B. 1 Jahr (danach neuen Token erstellen und in der App neu verbinden) |
+| Expiration | z.B. 1 Jahr |
 
-Schon einen Token ohne *Issues*? Auf GitHub beim Token *Edit* → Issues: Read and write ergänzen → *Update* (der Token
-bleibt gleich, in der App ist nichts zu tun; ggf. muss der Organisations-Owner die Änderung genehmigen).
+Den Token (`github_pat_…`) gleich kopieren – GitHub zeigt ihn nur einmal an. Dann in der App:
+*Mit dem Team verbinden* → **Einrichten** → **Eigener GitHub-Token** → Token und **Team-Passwort** eingeben.
+Als erste Person legst du das Team-Passwort fest (mindestens 8 Zeichen, zweimal eingeben).
 
-Den Token (`github_pat_…`) gleich in die App kopieren – GitHub zeigt ihn nur einmal an.
-Jede Person nutzt **ihren eigenen** Token: Jede Änderung ist dadurch im Daten-Repo als Commit dieser Person sichtbar.
+## 4. Kollegen einladen – ohne GitHub-Konto
 
-## 4. Jede Person: App installieren und verbinden
+1. Einmalig einen **Team-Token** erstellen: genauso wie oben, Name z.B. „TimeTracker Team“. Er ist der gemeinsame
+   Zugang aller Eingeladenen. (Alternativ kannst du deinen eigenen Token teilen – dann laufen deren Änderungen auf
+   GitHub unter deinem Konto, und wenn du deinen Token erneuerst, brauchen alle eine neue Einladung.)
+2. In der App: *Einstellungen* → *Team-Sync* → **Kollegen einladen (QR-Code)** → Team-Token einfügen →
+   **QR-Code erstellen**. Den QR-Code zeigen oder den Link schicken.
+3. Die Kollegin/der Kollege:
+   - öffnet **https://yannikschmidt.github.io/TimeTracker/** und legt die App auf den Home-Bildschirm
+     (iPhone: Teilen → *Zum Home-Bildschirm*; Android: ⋮ → *App installieren*),
+   - startet die App vom Home-Bildschirm → *Mit dem Team verbinden* → **Einrichten** → **Mit Einladung**,
+   - scannt den QR-Code (oder fügt den Link ein), gibt den **eigenen Namen** und das **Team-Passwort** ein.
+4. Das **Team-Passwort persönlich sagen** – nicht zusammen mit dem Link verschicken. Die Einladung allein nützt
+   niemandem: Der Token darin ist mit dem Team-Passwort verschlüsselt.
 
-1. **https://yannikschmidt.github.io/TimeTracker/** öffnen.
-   - **iPhone (Safari):** Teilen-Symbol → *Zum Home-Bildschirm*.
-   - **Android (Chrome):** Menü ⋮ → *App installieren* bzw. *Zum Startbildschirm hinzufügen*.
-2. App vom Home-Bildschirm starten → *Mit dem Team verbinden* → **Einrichten**.
-3. Daten-Repo (`TimeTracker-Data/TimeTracker-Daten`, ist vorbelegt), Token und **Team-Passwort** eingeben.
-   - Die **erste** Person legt das Team-Passwort fest (mindestens 8 Zeichen, zweimal eingeben).
-   - Alle anderen geben dasselbe Passwort ein. Es wird **nur einmal pro Gerät** abgefragt.
-4. Kamera-Zugriff erlauben, wenn die App beim ersten Scan danach fragt.
+Auf GitHub erscheinen Änderungen von Eingeladenen unter dem Konto des Team-Tokens, mit dem Namen der Person in der
+Beschreibung (z.B. „Max Müller (max-mueller): Aufträge aktualisiert“). In der App sieht man überall den Namen.
+Wer ein eigenes GitHub-Konto hat, kann sich weiterhin mit eigenem Token verbinden – beides geht gemischt.
+
+**Gerät verloren?** Den Team-Token auf GitHub löschen, einen neuen erstellen, neue Einladung an alle schicken
+(die Daten bleiben erhalten). Bei eigenem Token reicht es, diesen einen zu löschen.
+
+**Neues Gerät für dieselbe Person:** einfach erneut mit der Einladung und **genau demselben Namen** verbinden – die App
+fragt nach („Bist du das auf einem weiteren Gerät?“) und führt die Daten zusammen.
 
 ## Sicherheit
 
 - Verschlüsselung im Gerät: AES-256-GCM, Schlüssel per PBKDF2-SHA256 (600 000 Runden) aus dem Team-Passwort.
   GitHub (und jeder, der das Repo sieht) sieht nur verschlüsselte Daten sowie wer wann etwas geändert hat.
+- Einladungen (QR-Code/Link) enthalten den Team-Token nur verschlüsselt; der Code steht hinter „#“ und wird beim
+  Öffnen des Links nicht an einen Server gesendet.
+- Bei Einladungen ist der Name nicht fälschungssicher: Wer Einladung und Team-Passwort hat, könnte sich einen
+  beliebigen Namen geben. Für eindeutig nachweisbare Änderungen eigene GitHub-Konten verwenden.
 - Das Passwort wird nie gespeichert oder übertragen. Auf dem Gerät liegt nur der daraus abgeleitete Schlüssel
   (nicht auslesbar) und der damit verschlüsselte Token.
 - **Passwort vergessen = Daten nicht mehr lesbar.** Passwort sicher aufbewahren (z.B. Passwort-Manager).

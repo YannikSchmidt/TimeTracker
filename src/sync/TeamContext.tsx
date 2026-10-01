@@ -12,6 +12,19 @@ export interface ConnectInput {
   createPassword?: boolean;
 }
 
+export interface InviteConnectInput {
+  /** Link, QR-Inhalt oder Code */
+  invite: string;
+  name: string;
+  password: string;
+  /** Name existiert schon und die Person hat bestätigt, dass sie es ist (weiteres Gerät) */
+  confirmName?: boolean;
+}
+
+export type InviteConnectResult = { ok: true } | { ok: false; nameTaken: true } | { ok: false; error: string };
+
+export type CreateInviteResult = { ok: true; url: string } | { ok: false; error: string };
+
 export type ConnectResult = { ok: true } | { ok: false; needsNewPassword: true } | { ok: false; error: string };
 
 export type FeedbackResult =
@@ -33,6 +46,10 @@ export interface TeamState {
   status: SyncStatus;
   /** Vorschläge, die noch auf das Senden warten */
   pendingFeedback: number;
+  /** Über eine Einladung verbunden (gemeinsamer Team-Zugang, Person per Name) */
+  viaInvite: boolean;
+  connectWithInvite: (input: InviteConnectInput) => Promise<InviteConnectResult>;
+  createInvite: (otherToken?: string) => Promise<CreateInviteResult>;
   submitFeedback: (input: { category: FeedbackCategory; text: string }) => Promise<FeedbackResult>;
   /** Eigene Vorschläge vom Daten-Repo (wirft bei Fehlern) */
   listFeedback: () => Promise<FeedbackIssue[]>;
@@ -54,6 +71,9 @@ export const NO_TEAM: TeamState = {
   others: [],
   status: idle,
   pendingFeedback: 0,
+  viaInvite: false,
+  connectWithInvite: async () => ({ ok: false, error: 'Team-Sync gibt es nur in der Web-App.' }),
+  createInvite: async () => ({ ok: false, error: 'Team-Sync gibt es nur in der Web-App.' }),
   submitFeedback: async () => ({ ok: false, error: 'Vorschläge können nur aus der Web-App mit Team-Sync gesendet werden.' }),
   listFeedback: async () => [],
   syncNow: () => {},

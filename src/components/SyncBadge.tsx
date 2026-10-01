@@ -32,8 +32,8 @@ export function SyncBadge() {
           : state === 'syncing'
             ? 'Synchronisiere …'
             : lastSync
-              ? `Synchronisiert ${format(lastSync, 'HH:mm')} · ${team.login}`
-              : `Verbunden als ${team.login}`}
+              ? `Synchronisiert ${format(lastSync, 'HH:mm')} · ${team.name ?? team.login}`
+              : `Verbunden als ${team.name ?? team.login}`}
       </Text>
     </Pressable>
   );
@@ -51,7 +51,7 @@ export function SyncSetupHint() {
         <Text style={{ color: p.text, fontWeight: '700', fontSize: 16, flex: 1 }}>Mit dem Team verbinden</Text>
       </View>
       <Text style={{ color: p.muted }}>
-        Daten verschlüsselt auf allen Geräten und mit dem Team teilen. Du brauchst deinen persönlichen GitHub-Token und das
+        Daten verschlüsselt auf allen Geräten und mit dem Team teilen. Du brauchst eine Einladung (QR-Code) und das
         Team-Passwort.
       </Text>
       <View style={styles.row}>

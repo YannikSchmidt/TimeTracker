@@ -24,7 +24,8 @@ export interface PendingFeedback {
 }
 
 export interface FeedbackContext {
-  login: string;
+  /** z.B. „@anna“ (eigenes GitHub-Konto) oder „Max Müller (Team-Zugang)“ */
+  author: string;
   appVersion: string;
   platform: string;
 }
@@ -46,6 +47,7 @@ export interface FeedbackIssue {
 }
 
 const TITLE_MAX = 80;
+export const AUTHOR_PREFIX = '**Von:** ';
 
 export function buildIssue(f: Pick<PendingFeedback, 'category' | 'text' | 'createdAt'>, ctx: FeedbackContext): IssueDraft {
   const text = f.text.trim();
@@ -57,7 +59,7 @@ export function buildIssue(f: Pick<PendingFeedback, 'category' | 'text' | 'creat
     '',
     '---',
     `**Art:** ${kind}  `,
-    `**Von:** @${ctx.login}  `,
+    `${AUTHOR_PREFIX}${ctx.author}  `,
     `**Datum:** ${new Date(f.createdAt).toISOString().slice(0, 16).replace('T', ' ')} UTC  `,
     `**App-Version:** ${ctx.appVersion}  `,
     `**Gerät:** ${ctx.platform}`,
