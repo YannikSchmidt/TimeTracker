@@ -37,6 +37,16 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
 
   return {
     jobs,
+    // Löschvorschläge gibt es nur mit Team-Sync (Web-App); in der nativen App wird direkt gelöscht.
+    requests: {
+      async list() {
+        return [];
+      },
+      async create() {
+        throw new Error('Löschvorschläge gibt es nur mit Team-Sync.');
+      },
+      async setStatus() {},
+    },
     entries,
     dimensions,
     articles,

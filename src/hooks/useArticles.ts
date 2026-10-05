@@ -17,8 +17,9 @@ export function useArticles(): ArticlesData {
   );
 }
 
-/** „4711 · Halter links“ bzw. nur die Nummer, wenn keine Benennung gepflegt ist. */
+/** „4711 · Halter links“ bzw. nur Nummer oder nur Benennung, wenn eines fehlt. */
 export function articleLabel(article: Article): string {
+  if (!article.number) return article.name;
   return article.name ? `${article.number} · ${article.name}` : article.number;
 }
 
@@ -27,7 +28,7 @@ export function articleLabel(article: Article): string {
  * Artikelnummer (falls eine Benennung gepflegt ist) und Endgerät.
  */
 export function articleDetails(article: Article): string[] {
-  return [article.name ? `Art. ${article.number}` : '', article.device.trim()].filter(Boolean);
+  return [article.name && article.number ? `Art. ${article.number}` : '', article.device.trim()].filter(Boolean);
 }
 
 /**

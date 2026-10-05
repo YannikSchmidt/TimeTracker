@@ -41,6 +41,7 @@ export class SqliteArticleRepository implements ArticleRepository {
   }
 
   async findByNumber(number: string): Promise<Article | null> {
+    if (!number.trim()) return null; // Artikel nur mit Bezeichnung haben keine Nummer
     const row = await this.db.getFirstAsync<ArticleRow>(
       'SELECT * FROM articles WHERE number = ? AND deleted_at IS NULL',
       number.trim(),
@@ -49,8 +50,8 @@ export class SqliteArticleRepository implements ArticleRepository {
   }
 
   async create(input: ArticleInput): Promise<Article> {
-    const number = normalizeArticleNumber(input.number);
-    if (await this.findByNumber(number)) throw duplicateArticleError(number);
+    const number = normalizeArticleNumber(input.number, input.name);
+    if (number && (await this.findByNumber(number))) throw duplicateArticleError(number);
     const now = Date.now();
     const article: Article = {
       id: newId(),
@@ -76,8 +77,8 @@ export class SqliteArticleRepository implements ArticleRepository {
   async update(id: string, input: Partial<ArticleInput>): Promise<void> {
     const current = await this.get(id);
     if (!current) throw new Error('Artikel nicht gefunden.');
-    const number = input.number === undefined ? current.number : normalizeArticleNumber(input.number);
-    const other = await this.findByNumber(number);
+    const number = input.number === undefined ? current.number : normalizeArticleNumber(input.number, input.name ?? current.name);
+    const other = number ? await this.findByNumber(number) : null;
     if (other && other.id !== id) throw duplicateArticleError(number);
     await this.db.runAsync(
       'UPDATE articles SET number = ?, name = ?, device = ?, updated_at = ? WHERE id = ?',

@@ -1,42 +1,60 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { ArticleField, QuantityField, parseQuantity, type ArticleFieldHandle } from '../components/EntryFields';
+import { QuantityField, parseQuantity } from '../components/EntryFields';
 import { ScannerView } from '../components/ScannerView';
-import { Button, Chip, SectionTitle } from '../components/ui';
+import { Button, Card, Chip, SectionTitle } from '../components/ui';
 import { useData } from '../data/DataProvider';
+import { classifyCode, CODE_KIND_LABEL, isArticleKind, looksLikeNumber, type CodeKind } from '../domain/codes';
 import { suggestQuantity } from '../domain/quantity';
 import { frequentArticles, knownOrders, lastJobForOrder, recentOrders } from '../domain/suggestions';
-import { articleLabel, useArticles } from '../hooks/useArticles';
+import type { Article } from '../domain/types';
+import { articleLabel, findArticleByName, matchArticles, useArticles } from '../hooks/useArticles';
 import { useWork } from '../hooks/useWork';
 import { radius, spacing, usePalette } from '../theme';
 
-type Step = 'order' | 'article' | 'confirm';
+type Phase = 'scan' | 'ask' | 'confirm';
+
+/** Rückfrage zu einer Eingabe, die nicht eindeutig ist */
+type Question =
+  | { type: 'which'; code: string } // Auftrag oder Artikel?
+  | { type: 'newNumber'; code: string } // getippte Artikelnummer unbekannt → vertippt?
+  | { type: 'nameOnly'; name: string }; // unbekannte Bezeichnung → nur mit Bezeichnung anlegen?
 
 /**
- * Neuer Auftrag, so schnell wie möglich: Auftrags-Code scannen → (Artikel-Code scannen) → Start.
- * Ist der Auftrag schon bekannt, werden Artikel und Stückzahl übernommen.
+ * Neuer Auftrag, so schnell wie möglich: Codes in beliebiger Reihenfolge scannen – die App erkennt am Aufbau,
+ * ob es ein Auftrag (25/26/27…) oder ein Artikel (07… Gesamtgerät, 500000… Front) ist – und fragt dann,
+ * ob die nächste Nummer gescannt werden soll. Ist der Auftrag schon bekannt, wird der Artikel übernommen.
  */
 export default function StartScreen() {
   const p = usePalette();
   const { mutate } = useData();
   const work = useWork();
   const articles = useArticles();
-  const articleRef = useRef<ArticleFieldHandle>(null);
-  /** Wurde im Eintipp-Modus ein Artikel gewählt? (verhindert „ohne Artikel“ beim Weiter) */
-  const picked = useRef(false);
+  const patterns = work.settings.codePatterns;
 
-  const [step, setStep] = useState<Step>('order');
+  const [phase, setPhase] = useState<Phase>('scan');
   const [orderNo, setOrderNo] = useState<string | null>(null);
   const [articleId, setArticleId] = useState<string | null>(null);
+  /** „Ohne Auftrag“ bzw. „Ohne Artikel“ gewählt */
+  const [skipOrder, setSkipOrder] = useState(false);
+  const [skipArticle, setSkipArticle] = useState(false);
   const [quantity, setQuantity] = useState('');
   const [quantityHint, setQuantityHint] = useState('');
   const [typing, setTyping] = useState(false);
-  const [typedOrder, setTypedOrder] = useState('');
+  const [typed, setTyped] = useState('');
+  const [question, setQuestion] = useState<Question | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  /** wechselt bei jedem neuen Scan-Schritt → Scanner startet neu */
+  const [scanRound, setScanRound] = useState(0);
+
+  const article = articleId ? articles.byId.get(articleId) : undefined;
+  const needOrder = !orderNo && !skipOrder;
+  const needArticle = !articleId && !skipArticle;
 
   const goConfirm = (order: string | null, article: string | null) => {
     const last = order ? lastJobForOrder(work.all.jobs, order) : null;
@@ -49,48 +67,82 @@ export default function StartScreen() {
       setQuantityHint(s.source === 'history' ? 'häufigste Stückzahl dieses Artikels' : 'Standard-Stückzahl');
     }
     setTyping(false);
-    setStep('confirm');
+    setPhase('confirm');
   };
 
-  const chooseOrder = (value: string | null) => {
-    const order = value?.trim() || null;
+  /** Nach jeder Eingabe: fertig → Bestätigung, sonst fragen, ob die nächste Nummer gescannt werden soll. */
+  const advance = (next: { order: string | null; article: string | null; skipOrder: boolean; skipArticle: boolean }) => {
+    setTyping(false);
+    setTyped('');
+    setQuestion(null);
+    const missingOrder = !next.order && !next.skipOrder;
+    const missingArticle = !next.article && !next.skipArticle;
+    if (!missingOrder && !missingArticle) return goConfirm(next.order, next.article);
+    setPhase('ask');
+  };
+
+  const state = () => ({ order: orderNo, article: articleId, skipOrder, skipArticle });
+
+  const applyOrder = (value: string) => {
+    const order = value.trim();
     setOrderNo(order);
-    // Bekannter Auftrag → Artikel übernehmen und direkt zur Bestätigung
-    const last = order ? lastJobForOrder(work.all.jobs, order) : null;
-    if (last?.articleId && articles.byId.has(last.articleId)) {
-      setArticleId(last.articleId);
-      goConfirm(order, last.articleId);
-    } else {
-      setTyping(false);
-      setStep('article');
+    setSkipOrder(false);
+    // Bekannter Auftrag → Artikel übernehmen
+    const last = lastJobForOrder(work.all.jobs, order);
+    let article = articleId;
+    if (!article && last?.articleId && articles.byId.has(last.articleId)) {
+      article = last.articleId;
+      setArticleId(article);
     }
+    advance({ ...state(), order, article, skipOrder: false });
   };
 
-  const chooseArticle = (id: string | null) => {
+  const applyArticle = (id: string) => {
     setArticleId(id);
-    goConfirm(orderNo, id);
+    setSkipArticle(false);
+    advance({ ...state(), article: id, skipArticle: false });
   };
 
-  /** Im Artikel-Schritt: noch sichtbaren Auftrags-Code ignorieren und weiter scannen. */
-  const onArticleScanned = (code: string) => {
-    if (orderNo && code === orderNo) {
-      setError('Das ist der Auftrags-Code – bitte jetzt den Artikel-Code scannen.');
-      return false;
-    }
-    void onArticleScan(code);
-    return true;
-  };
-
-  const onArticleScan = async (code: string) => {
-    setError(null);
-    const found = articles.articles.find((a) => a.number === code);
-    if (found) return chooseArticle(found.id);
+  const createArticle = async (number: string, name = '') => {
     try {
-      const created = await mutate((r) => r.articles.create({ number: code, name: '', device: '' }));
-      chooseArticle(created.id);
+      const created = await mutate((r) => r.articles.create({ number, name, device: '' }));
+      applyArticle(created.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  const findByNumber = (number: string): Article | undefined =>
+    number ? articles.articles.find((a) => a.number === number) : undefined;
+
+  /** Eine Nummer übernehmen – Art aus dem Aufbau, sonst aus der Liste, sonst nachfragen. */
+  const handleCode = (raw: string, source: 'scan' | 'typed'): boolean => {
+    const code = raw.trim();
+    setError(null);
+    setNotice(null);
+    if (!code) return false;
+    if (code === orderNo || (article && code === article.number)) {
+      setNotice(`${code} ist schon erfasst – bitte den anderen Code scannen.`);
+      return false;
+    }
+    const known = findByNumber(code);
+    const kind: CodeKind = known ? 'device' : classifyCode(code, patterns);
+    if (kind === 'order') {
+      applyOrder(code);
+    } else if (isArticleKind(kind)) {
+      if (known) applyArticle(known.id);
+      else if (source === 'scan') void createArticle(code); // gescannt → sicher richtig, direkt anlegen
+      else setQuestion({ type: 'newNumber', code });
+    } else if (knownOrders(work.all.jobs).includes(code)) {
+      applyOrder(code);
+    } else if (source === 'typed' && !looksLikeNumber(code)) {
+      const byName = findArticleByName(articles.articles, code);
+      if (byName) applyArticle(byName.id);
+      else setQuestion({ type: 'nameOnly', name: code });
+    } else {
+      setQuestion({ type: 'which', code });
+    }
+    return true;
   };
 
   const start = async () => {
@@ -105,59 +157,124 @@ export default function StartScreen() {
     }
   };
 
-  const article = articleId ? articles.byId.get(articleId) : undefined;
-  const orderMatches = typedOrder.trim()
-    ? knownOrders(work.all.jobs).filter((o) => o.toLowerCase().includes(typedOrder.trim().toLowerCase())).slice(0, 6)
-    : [];
+  const scanAgain = () => {
+    setScanRound((n) => n + 1);
+    setNotice(null);
+    setPhase('scan');
+  };
+
+  const skip = (what: 'order' | 'article') => {
+    if (what === 'order') setSkipOrder(true);
+    else setSkipArticle(true);
+    advance({ ...state(), ...(what === 'order' ? { skipOrder: true } : { skipArticle: true }) });
+  };
+
+  const edit = (what: 'order' | 'article') => {
+    if (what === 'order') {
+      setOrderNo(null);
+      setSkipOrder(false);
+    } else {
+      setArticleId(null);
+      setSkipArticle(false);
+    }
+    scanAgain();
+  };
+
+  const wanted = needOrder && needArticle ? 'Auftrag oder Artikel' : needOrder ? 'Auftrag' : 'Artikel';
+  const q = typed.trim().toLowerCase();
+  const orderMatches = q && needOrder ? knownOrders(work.all.jobs).filter((o) => o.toLowerCase().includes(q)).slice(0, 4) : [];
+  const articleMatches = q && needArticle ? matchArticles(articles.articles, typed, 5) : [];
+
+  const done = (
+    <View style={[styles.summary, { backgroundColor: p.card, borderColor: p.border }]}>
+      <SummaryRow label="Auftrag" value={orderNo ?? (skipOrder ? 'ohne' : '–')} ok={!!orderNo} onEdit={phase === 'confirm' ? () => edit('order') : undefined} />
+      <SummaryRow
+        label="Artikel"
+        value={article ? articleLabel(article) : skipArticle ? 'ohne' : '–'}
+        ok={!!article}
+        onEdit={phase === 'confirm' ? () => edit('article') : undefined}
+      />
+    </View>
+  );
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <View style={styles.progress}>
-        {(['order', 'article', 'confirm'] as Step[]).map((s, i) => (
-          <View
-            key={s}
-            style={[styles.progressBar, { backgroundColor: i <= ['order', 'article', 'confirm'].indexOf(step) ? p.primary : p.track }]}
-          />
-        ))}
-      </View>
-
-      {step === 'order' && (
+      {phase === 'scan' && (
         <>
-          <Text style={[styles.title, { color: p.text }]}>Auftrag scannen</Text>
-          {!typing && <ScannerView key="order" hint="Auftrags-Code scannen" onScan={chooseOrder} />}
-          {recentOrders(work.all.jobs).length > 0 && !typing && (
+          <Text style={[styles.title, { color: p.text }]}>{wanted} scannen</Text>
+          {(orderNo || article || skipOrder || skipArticle) && done}
+          {!typing && !question && <ScannerView key={`scan-${scanRound}`} hint={`${wanted} scannen`} onScan={(c) => handleCode(c, 'scan')} />}
+
+          {!typing && !question && needOrder && recentOrders(work.all.jobs).length > 0 && (
             <View>
               <SectionTitle>Zuletzt</SectionTitle>
               <View style={styles.chips}>
                 {recentOrders(work.all.jobs).map((o) => (
-                  <Chip key={o} label={o} onPress={() => chooseOrder(o)} />
+                  <Chip key={o} label={o} onPress={() => applyOrder(o)} />
                 ))}
               </View>
             </View>
           )}
-          {typing ? (
+          {!typing && !question && needArticle && frequentArticles(work.all.jobs).length > 0 && (
+            <View>
+              <SectionTitle>Häufige Artikel</SectionTitle>
+              <View style={styles.chips}>
+                {frequentArticles(work.all.jobs)
+                  .map((id) => articles.byId.get(id))
+                  .filter((a): a is Article => !!a)
+                  .map((a) => (
+                    <Chip key={a.id} label={a.name || a.number} onPress={() => applyArticle(a.id)} />
+                  ))}
+              </View>
+            </View>
+          )}
+
+          {question ? (
+            <QuestionCard
+              question={question}
+              onOrder={(c) => applyOrder(c)}
+              onArticleNumber={(c) => {
+                const known = findByNumber(c);
+                if (known) applyArticle(known.id);
+                else void createArticle(c);
+              }}
+              onNameOnly={(name) => void createArticle('', name)}
+              onCancel={() => setQuestion(null)}
+            />
+          ) : typing ? (
             <View style={{ gap: spacing.sm }}>
               <TextInput
                 autoFocus
-                value={typedOrder}
-                onChangeText={setTypedOrder}
-                onSubmitEditing={() => chooseOrder(typedOrder)}
-                placeholder="Auftragsnummer"
+                value={typed}
+                onChangeText={(t) => {
+                  setTyped(t);
+                  setNotice(null);
+                }}
+                onSubmitEditing={() => handleCode(typed, 'typed')}
+                placeholder={needOrder && needArticle ? 'Auftrag, Artikelnummer oder Bezeichnung' : needOrder ? 'Auftragsnummer' : 'Artikelnummer oder Bezeichnung'}
                 placeholderTextColor={p.muted}
-                autoCapitalize="characters"
+                autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
-                accessibilityLabel="Auftragsnummer"
+                accessibilityLabel="Nummer oder Bezeichnung"
                 style={[styles.input, { color: p.text, borderColor: p.border, backgroundColor: p.card }]}
               />
-              {orderMatches.length > 0 && (
-                <View style={styles.chips}>
+              {(orderMatches.length > 0 || articleMatches.length > 0) && (
+                <View style={[styles.suggestions, { borderColor: p.border, backgroundColor: p.card }]}>
                   {orderMatches.map((o) => (
-                    <Chip key={o} label={o} onPress={() => chooseOrder(o)} />
+                    <Suggestion key={`o-${o}`} title={o} subtitle="Auftrag" onPress={() => applyOrder(o)} />
+                  ))}
+                  {articleMatches.map((a) => (
+                    <Suggestion
+                      key={a.id}
+                      title={a.name || a.number}
+                      subtitle={['Artikel', a.name ? a.number : '', a.device].filter(Boolean).join(' · ')}
+                      onPress={() => applyArticle(a.id)}
+                    />
                   ))}
                 </View>
               )}
-              <Button title="Weiter" icon="arrow-forward" onPress={() => chooseOrder(typedOrder)} disabled={!typedOrder.trim()} />
+              <Button title="Weiter" icon="arrow-forward" onPress={() => handleCode(typed, 'typed')} disabled={!typed.trim()} />
               <Button title="Doch scannen" variant="secondary" icon="scan-outline" onPress={() => setTyping(false)} />
             </View>
           ) : (
@@ -165,76 +282,48 @@ export default function StartScreen() {
               <View style={{ flex: 1 }}>
                 <Button title="Eintippen" variant="secondary" icon="keypad-outline" onPress={() => setTyping(true)} />
               </View>
-              <View style={{ flex: 1 }}>
-                <Button title="Ohne Auftrag" variant="secondary" onPress={() => chooseOrder(null)} />
-              </View>
+              {needOrder && (
+                <View style={{ flex: 1 }}>
+                  <Button title="Ohne Auftrag" variant="secondary" onPress={() => skip('order')} />
+                </View>
+              )}
+              {!needOrder && needArticle && (
+                <View style={{ flex: 1 }}>
+                  <Button title="Ohne Artikel" variant="secondary" onPress={() => skip('article')} />
+                </View>
+              )}
             </View>
           )}
         </>
       )}
 
-      {step === 'article' && (
+      {phase === 'ask' && (
         <>
-          <Text style={[styles.title, { color: p.text }]}>Artikel scannen</Text>
-          {orderNo && <Text style={{ color: p.muted }}>Auftrag {orderNo} ist neu – welcher Artikel?</Text>}
-          {!typing && <ScannerView key="article" hint="Artikel-Code scannen" onScan={onArticleScanned} />}
-          {frequentArticles(work.all.jobs).length > 0 && !typing && (
-            <View>
-              <SectionTitle>Häufig</SectionTitle>
-              <View style={styles.chips}>
-                {frequentArticles(work.all.jobs)
-                  .map((id) => articles.byId.get(id))
-                  .filter((a) => !!a)
-                  .map((a) => (
-                    <Chip key={a!.id} label={a!.name || a!.number} onPress={() => chooseArticle(a!.id)} />
-                  ))}
-              </View>
-            </View>
-          )}
-          {typing ? (
-            <View style={{ gap: spacing.sm }}>
-              <ArticleField
-                ref={articleRef}
-                articles={articles}
-                value={null}
-                onChange={(id) => {
-                  if (!id) return;
-                  picked.current = true;
-                  chooseArticle(id);
-                }}
-                autoFocus
-              />
-              <Button
-                title="Weiter"
-                icon="arrow-forward"
-                onPress={async () => {
-                  picked.current = false;
-                  const ok = await articleRef.current?.commit();
-                  if (ok && !picked.current) chooseArticle(null);
-                }}
-              />
-              <Button title="Doch scannen" variant="secondary" icon="scan-outline" onPress={() => setTyping(false)} />
-            </View>
-          ) : (
-            <View style={styles.row}>
-              <View style={{ flex: 1 }}>
-                <Button title="Suchen" variant="secondary" icon="search" onPress={() => setTyping(true)} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Button title="Ohne Artikel" variant="secondary" onPress={() => chooseArticle(null)} />
-              </View>
-            </View>
-          )}
+          <Text style={[styles.title, { color: p.text }]}>Erkannt</Text>
+          {done}
+          <Card style={{ gap: spacing.md }}>
+            <Text style={{ color: p.text, fontSize: 18, fontWeight: '700' }}>
+              {needOrder ? 'Auftrag auch scannen?' : 'Artikel auch scannen?'}
+            </Text>
+            <Button
+              title={needOrder ? 'Auftrag scannen' : 'Artikel scannen'}
+              icon="scan-outline"
+              size="large"
+              onPress={scanAgain}
+            />
+            <Button
+              title={needOrder ? 'Ohne Auftrag weiter' : 'Ohne Artikel weiter'}
+              variant="secondary"
+              onPress={() => skip(needOrder ? 'order' : 'article')}
+            />
+          </Card>
         </>
       )}
 
-      {step === 'confirm' && (
+      {phase === 'confirm' && (
         <>
           <Text style={[styles.title, { color: p.text }]}>Bereit?</Text>
-          <View style={[styles.summary, { backgroundColor: p.card, borderColor: p.border }]}>
-            <SummaryRow label="Auftrag" value={orderNo ?? '–'} onEdit={() => setStep('order')} />
-            <SummaryRow label="Artikel" value={article ? articleLabel(article) : '–'} onEdit={() => setStep('article')} />
-          </View>
+          {done}
           <View style={{ gap: spacing.sm }}>
             <SectionTitle>Stückzahl</SectionTitle>
             <QuantityField value={quantity} onChange={setQuantity} />
@@ -244,32 +333,128 @@ export default function StartScreen() {
         </>
       )}
 
+      {notice && <Text style={{ color: p.warning }}>{notice}</Text>}
       {error && <Text style={{ color: p.danger }}>{error}</Text>}
     </ScrollView>
   );
 }
 
-function SummaryRow({ label, value, onEdit }: { label: string; value: string; onEdit: () => void }) {
+function QuestionCard({
+  question,
+  onOrder,
+  onArticleNumber,
+  onNameOnly,
+  onCancel,
+}: {
+  question: Question;
+  onOrder: (code: string) => void;
+  onArticleNumber: (code: string) => void;
+  onNameOnly: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const p = usePalette();
+  const warn = { borderColor: p.warning, backgroundColor: p.warning + '14' };
+  if (question.type === 'which') {
+    return (
+      <View style={[styles.question, warn]}>
+        <Text style={{ color: p.text }}>
+          <Text style={{ fontWeight: '700' }}>{question.code}</Text> passt zu keinem bekannten Nummernformat. Was ist es?
+        </Text>
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Button title={CODE_KIND_LABEL.order} onPress={() => onOrder(question.code)} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button title="Artikel" onPress={() => onArticleNumber(question.code)} />
+          </View>
+        </View>
+        <Button title="Abbrechen" variant="secondary" onPress={onCancel} />
+      </View>
+    );
+  }
+  if (question.type === 'newNumber') {
+    return (
+      <View style={[styles.question, warn]}>
+        <Text style={{ color: p.text }}>
+          Artikel <Text style={{ fontWeight: '700' }}>{question.code}</Text> ist nicht in der Liste. Vertippt?
+        </Text>
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Button title="Korrigieren" variant="secondary" onPress={onCancel} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button title="Neu anlegen" icon="add" onPress={() => onArticleNumber(question.code)} />
+          </View>
+        </View>
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.question, warn]}>
+      <Text style={{ color: p.text }}>
+        Keinen Artikel „<Text style={{ fontWeight: '700' }}>{question.name}</Text>“ gefunden. Nur mit Bezeichnung anlegen (ohne
+        Artikelnummer)?
+      </Text>
+      <View style={styles.row}>
+        <View style={{ flex: 1 }}>
+          <Button title="Korrigieren" variant="secondary" onPress={onCancel} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button title="Anlegen" icon="add" onPress={() => onNameOnly(question.name)} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function Suggestion({ title, subtitle, onPress }: { title: string; subtitle: string; onPress: () => void }) {
   const p = usePalette();
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label} ändern`} onPress={onEdit} style={styles.summaryRow}>
-      <Text style={{ color: p.muted, width: 70 }}>{label}</Text>
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.suggestion, { backgroundColor: pressed ? p.track : 'transparent' }]}
+    >
+      <Text style={{ color: p.text, fontWeight: '600' }} numberOfLines={1}>
+        {title}
+      </Text>
+      <Text style={{ color: p.muted, fontSize: 13 }} numberOfLines={1}>
+        {subtitle}
+      </Text>
+    </Pressable>
+  );
+}
+
+function SummaryRow({ label, value, ok, onEdit }: { label: string; value: string; ok: boolean; onEdit?: () => void }) {
+  const p = usePalette();
+  const content = (
+    <>
+      <Ionicons name={ok ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={ok ? p.success : p.muted} />
+      <Text style={{ color: p.muted, width: 62 }}>{label}</Text>
       <Text style={{ color: p.text, fontWeight: '700', fontSize: 17, flex: 1 }} numberOfLines={1}>
         {value}
       </Text>
-      <Ionicons name="create-outline" size={18} color={p.primary} />
+      {onEdit && <Ionicons name="create-outline" size={18} color={p.primary} />}
+    </>
+  );
+  return onEdit ? (
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label} ändern`} onPress={onEdit} style={styles.summaryRow}>
+      {content}
     </Pressable>
+  ) : (
+    <View style={styles.summaryRow}>{content}</View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xl * 2 },
-  progress: { flexDirection: 'row', gap: spacing.sm },
-  progressBar: { flex: 1, height: 4, borderRadius: 2 },
   title: { fontSize: 26, fontWeight: '800' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   row: { flexDirection: 'row', gap: spacing.sm },
   input: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing.md, height: 52, fontSize: 20 },
   summary: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md, paddingHorizontal: spacing.md },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md },
+  suggestions: { borderWidth: 1, borderRadius: radius.md, overflow: 'hidden' },
+  suggestion: { gap: 2, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
+  question: { borderWidth: 1, borderRadius: radius.md, padding: spacing.md, gap: spacing.md },
 });

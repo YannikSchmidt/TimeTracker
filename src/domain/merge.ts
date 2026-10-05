@@ -1,5 +1,5 @@
 import { normalizeArticle, type BackupData } from './legacy';
-import type { Article, Dimension, DimensionValue, Entry, Job, Millis, Settings } from './types';
+import type { Article, DeletionRequest, Dimension, DimensionValue, Entry, Job, Millis, Settings } from './types';
 
 interface Versioned {
   id: string;
@@ -126,6 +126,8 @@ export interface SharedData {
   articles: Article[];
   dimensions: Dimension[];
   values: DimensionValue[];
+  /** Löschvorschläge – fehlt in Dateien älterer App-Versionen */
+  deletionRequests?: DeletionRequest[];
 }
 
 /** Lokalen Stand in eigene Datei und gemeinsame Datei aufteilen. */
@@ -141,7 +143,13 @@ export function splitSnapshot(data: BackupData, owner: string, name?: string): {
       settings: data.settings,
       settingsUpdatedAt: data.settingsUpdatedAt ?? 0,
     },
-    shared: normalizeShared({ version: 1, articles: data.articles, dimensions: data.dimensions, values: data.values }),
+    shared: normalizeShared({
+      version: 1,
+      articles: data.articles,
+      dimensions: data.dimensions,
+      values: data.values,
+      deletionRequests: data.deletionRequests ?? [],
+    }),
   };
 }
 
@@ -154,6 +162,7 @@ export function joinSnapshot(person: PersonData, shared: SharedData): BackupData
     entries: person.entries,
     articles: shared.articles,
     dimensions: shared.dimensions,
+    deletionRequests: shared.deletionRequests ?? [],
     values: shared.values,
     settings: person.settings,
     settingsUpdatedAt: person.settingsUpdatedAt,
@@ -186,6 +195,7 @@ export function mergeShared(local: SharedData, remote: SharedData | null, base: 
     articles: merge3(base?.articles ?? null, local.articles, remote.articles),
     dimensions: merge3(base?.dimensions ?? null, local.dimensions, remote.dimensions),
     values: merge3(base?.values ?? null, local.values, remote.values),
+    deletionRequests: merge3(base?.deletionRequests ?? null, local.deletionRequests ?? [], remote.deletionRequests ?? []),
   });
 }
 

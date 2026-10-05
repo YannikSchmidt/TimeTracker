@@ -29,6 +29,13 @@ export default function TimerScreen() {
   const dayEnd = addDays(dayStart, 1).getTime();
 
   const open = sortOpenJobs(work.jobs.filter((j) => j.status !== 'done'));
+  // Nacharbeit zu einem offenen Auftrag steht in dessen Kachel; sonst als eigene Kachel (gleiche Farbe)
+  const openIds = new Set(open.map((j) => j.id));
+  const nestedIn = (j: (typeof open)[number]) => (j.kind === 'rework' && j.parentJobId && openIds.has(j.parentJobId) ? j.parentJobId : null);
+  const cards = open
+    .filter((j) => !nestedIn(j))
+    .map((job) => ({ job, reworks: open.filter((r) => nestedIn(r) === job.id) }))
+    .sort((a, b) => Number([b.job, ...b.reworks].some((j) => j.status === 'running')) - Number([a.job, ...a.reworks].some((j) => j.status === 'running')));
   const doneToday = work.jobs
     .filter((j) => j.status === 'done' && j.kind === 'order' && (j.finishedAt ?? 0) >= dayStart)
     .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0));
@@ -57,18 +64,19 @@ export default function TimerScreen() {
       </Text>
 
       <View style={{ gap: spacing.md }}>
-        <SectionTitle>Offene Aufträge {open.length > 0 ? `(${open.length})` : ''}</SectionTitle>
+        <SectionTitle>Offene Aufträge {cards.length > 0 ? `(${cards.length})` : ''}</SectionTitle>
         {!work.loaded ? (
           <Empty text="Lädt …" />
         ) : open.length === 0 ? (
           <Empty text="Kein offener Auftrag. Tippe auf „Neuer Auftrag“." />
         ) : (
-          open.map((job) => (
+          cards.map(({ job, reworks }) => (
             <JobCard
               key={job.id}
               job={job}
               entries={work.entriesOf.get(job.id) ?? []}
               article={job.articleId ? articles.byId.get(job.articleId) : undefined}
+              reworks={reworks.map((r) => ({ job: r, entries: work.entriesOf.get(r.id) ?? [] }))}
               now={now}
             />
           ))

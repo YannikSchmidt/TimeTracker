@@ -11,11 +11,14 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
 
 ## Funktionen
 
-- **Aufträge als Timer-Liste**: Mehrere Aufträge können offen sein, aber immer läuft nur einer.
+- **Aufträge als Timer-Liste**: Mehrere Aufträge können offen sein, aber immer läuft nur einer. Jeder Auftrag hat
+  seine eigene Farbe; Nacharbeit läuft in der Kachel ihres Auftrags.
   Starten oder Fortsetzen eines Auftrags pausiert automatisch den laufenden. Jeder Auftrag ist pausierbar.
-- **Start mit Scan zuerst**: „Neuer Auftrag“ → Auftrags-Code scannen → Artikel-Code scannen → Start.
-  Ist der Auftrag schon bekannt, werden Artikel und Stückzahl übernommen und der Artikel-Schritt entfällt.
-  Eintippen und „ohne Auftrag/Artikel“ sind jederzeit möglich.
+- **Start mit Scan zuerst**: „Neuer Auftrag“ → Strichcodes in beliebiger Reihenfolge scannen. Die App erkennt am
+  Aufbau, was es ist (Auftrag `25/26/27*****`, Gesamtgerät `07******`, Front/Einzelteil `500000****` – in den
+  Einstellungen änderbar) und fragt, ob die nächste Nummer gescannt werden soll. Ist der Auftrag schon bekannt, werden
+  Artikel und Stückzahl übernommen. Eintippen (Nummer oder Bezeichnung) und „ohne Auftrag/Artikel“ gehen jederzeit;
+  Artikel lassen sich auch nur mit Bezeichnung anlegen.
 - **Vorschläge aus früheren Eingaben**: zuletzt verwendete Auftragsnummern, häufige Artikel, Stückzahl
   (häufigste des Artikels, sonst Standard 24 – einstellbar) und bisherige Nacharbeitsgründe.
 - **Nacharbeit**: eigener Timer zu einem Auftrag (offen oder abgeschlossen). Beim Beenden wird der Grund
@@ -32,6 +35,8 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
 - **Team-Sync** (Web-App): verschlüsselt (AES-256, Team-Passwort) über ein privates GitHub-Repo; persönlicher Token
   pro Person, damit jede Änderung nachvollziehbar ist. Alle sehen alles (Filter *Ich / Person / Alle*),
   bearbeiten aber nur ihre eigenen Aufträge. Offline nutzbar, Abgleich automatisch.
+- **Löschen nur durch den Admin**: alle anderen schlagen Löschungen mit Begründung vor; der Admin entscheidet in den
+  Einstellungen. Bestätigte Löschungen fremder Aufträge führt das Gerät der Besitzerin/des Besitzers aus.
 - **Kollegen einladen per QR-Code**: kein GitHub-Konto nötig – QR scannen, Name und Team-Passwort eingeben.
 - **Verbesserungsvorschläge** aus der App → Issues im privaten Daten-Repo (offline vorgemerkt).
 - **Automatische Updates**: keine Neuinstallation; die App lädt neue Versionen selbst (im Hintergrund oder per Hinweis).

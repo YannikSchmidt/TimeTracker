@@ -3,6 +3,7 @@ import { upgradeBackup, type BackupData, type LegacyBackupData } from '../../dom
 import {
   DEFAULT_SETTINGS,
   type Article,
+  type DeletionRequest,
   type Dimension,
   type DimensionValue,
   type Entry,
@@ -49,6 +50,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
   let articles: Article[] = start?.articles.map((a) => ({ ...a })) ?? [];
   let settings: Settings = { ...DEFAULT_SETTINGS, ...start?.settings };
   let settingsUpdatedAt: Millis = start?.settingsUpdatedAt ?? 0;
+  let requests: DeletionRequest[] = (start?.deletionRequests ?? []).map((r) => ({ ...r }));
 
   if (dimensions.length === 0) {
     dimensions = DEFAULT_DIMENSIONS.map((d, i) => ({
@@ -74,9 +76,10 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
     articles: articles.map((a) => ({ ...a })),
     settings: { ...settings, workDays: [...settings.workDays] },
     settingsUpdatedAt,
+    deletionRequests: requests.map((r) => ({ ...r })),
   });
   const changed = () => persist?.(snapshot());
-  const findArticle = (number: string) => articles.find((a) => a.number === number && !a.deletedAt);
+  const findArticle = (number: string) => (number ? articles.find((a) => a.number === number && !a.deletedAt) : undefined);
   const liveEntries = () => entries.filter((e) => !e.deletedAt).sort((a, b) => b.startAt - a.startAt);
   const liveJobs = () => jobs.filter((j) => !j.deletedAt);
   const findJob = (id: string) => {
@@ -118,6 +121,41 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
   };
 
   const repos: Repositories = {
+    requests: {
+      async list() {
+        return requests
+          .filter((r) => !r.deletedAt)
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .map((r) => ({ ...r }));
+      },
+      async create(input) {
+        const t = now();
+        const approved = input.status === 'approved';
+        const request: DeletionRequest = {
+          id: makeId(),
+          kind: input.kind,
+          targetId: input.targetId,
+          owner: input.owner,
+          label: input.label,
+          reason: input.reason.trim(),
+          requestedBy: owner(),
+          status: approved ? 'approved' : 'open',
+          decidedBy: approved ? owner() : null,
+          createdAt: t,
+          updatedAt: t,
+          deletedAt: null,
+        };
+        requests.push(request);
+        changed();
+        return { ...request };
+      },
+      async setStatus(id, status) {
+        const r = requests.find((x) => x.id === id);
+        if (!r) throw notFound('Löschvorschlag');
+        Object.assign(r, { status, updatedAt: now(), ...(status === 'done' ? {} : { decidedBy: owner() }) });
+        changed();
+      },
+    },
     jobs: {
       async listOpen() {
         return sortOpenJobs(liveJobs().filter((j) => j.status !== 'done')).map(copyJob);
@@ -292,7 +330,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         return a ? { ...a } : null;
       },
       async create(input) {
-        const number = normalizeArticleNumber(input.number);
+        const number = normalizeArticleNumber(input.number, input.name);
         if (findArticle(number)) throw duplicateArticleError(number);
         const t = now();
         const article: Article = {
@@ -306,7 +344,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
       async update(id, input) {
         const a = articles.find((x) => x.id === id);
         if (!a) throw new Error('Artikel nicht gefunden.');
-        const number = input.number === undefined ? a.number : normalizeArticleNumber(input.number);
+        const number = input.number === undefined ? a.number : normalizeArticleNumber(input.number, input.name ?? a.name);
         const other = findArticle(number);
         if (other && other.id !== id) throw duplicateArticleError(number);
         Object.assign(a, {
@@ -407,6 +445,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
       articles = next.articles.map((a) => ({ ...a }));
       settings = { ...DEFAULT_SETTINGS, ...next.settings };
       settingsUpdatedAt = next.settingsUpdatedAt ?? settingsUpdatedAt;
+      requests = (next.deletionRequests ?? []).map((r) => ({ ...r }));
       changed();
     },
   };

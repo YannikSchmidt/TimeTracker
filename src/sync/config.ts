@@ -25,3 +25,9 @@ export function normalizeRepo(input: string): string {
     .replace(/\.git$/i, '')
     .replace(/\/+$/, '');
 }
+
+/**
+ * Admins (GitHub-Logins, klein geschrieben): nur sie löschen direkt, alle anderen schlagen Löschungen vor.
+ * Ohne Team-Sync (nur dieses Gerät) darf jede Person löschen.
+ */
+export const ADMINS = ['yannikschmidt'];

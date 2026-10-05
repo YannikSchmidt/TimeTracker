@@ -3,12 +3,16 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { CodePatternsCard } from '../../components/CodePatternsCard';
+import { DeletionRequestsCard } from '../../components/DeletionRequestsCard';
 import { SyncBadge } from '../../components/SyncBadge';
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
+import { DEFAULT_CODE_PATTERNS } from '../../domain/codes';
 import { jobsToCsv } from '../../domain/export';
 import type { Dimension } from '../../domain/types';
 import { useDimensions, type DimensionsData } from '../../hooks/useDimensions';
+import { useWork } from '../../hooks/useWork';
 import { pickTextFile, shareTextFile } from '../../lib/files';
 import { useAppUpdate } from '../../lib/updates';
 import { APP_VERSION, shortVersion } from '../../lib/version';
@@ -29,6 +33,7 @@ export default function SettingsScreen() {
   const [status, setStatus] = useState<string | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const team = useTeam();
+  const work = useWork();
   const update = useAppUpdate();
 
   const [hoursFor, setHoursFor] = useState<number | null>(null);
@@ -143,6 +148,9 @@ export default function SettingsScreen() {
         </Text>
       </Card>
 
+      <SectionTitle>Nummern erkennen</SectionTitle>
+      <CodePatternsCard patterns={settings?.codePatterns ?? DEFAULT_CODE_PATTERNS} />
+
       <SectionTitle>Merkmale</SectionTitle>
       <Text style={{ color: p.muted, marginTop: -spacing.sm }}>
         Aktive Merkmale erscheinen beim Timer und in der Statistik. Werte lange drücken zum Archivieren.
@@ -209,6 +217,8 @@ export default function SettingsScreen() {
           </Card>
         </>
       )}
+
+      <DeletionRequestsCard nameOf={work.nameOf} />
 
       <SectionTitle>Feedback</SectionTitle>
       <Card style={{ gap: spacing.md }}>

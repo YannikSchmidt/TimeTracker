@@ -1,3 +1,4 @@
+import { DEFAULT_CODE_PATTERNS } from '../src/domain/codes';
 import { splitSnapshot, mergePerson } from '../src/domain/merge';
 import { createTeamMeta, encryptJson, WrongPasswordError } from '../src/sync/crypto';
 import { createInvite, decodeInvite, encodeInvite, inviteUrl, openInvite, personId } from '../src/sync/invite';
@@ -57,7 +58,7 @@ describe('Einladung', () => {
   });
 
   it('Anzeigename wird in der eigenen Datei mitgespeichert und beim Zusammenführen behalten', () => {
-    const data = { version: 2 as const, exportedAt: 0, jobs: [], entries: [], dimensions: [], values: [], articles: [], settings: { weeklyTargetHours: 40, workDays: [1, 2, 3, 4, 5], defaultQuantity: 24 } };
+    const data = { version: 2 as const, exportedAt: 0, jobs: [], entries: [], dimensions: [], values: [], articles: [], settings: { weeklyTargetHours: 40, workDays: [1, 2, 3, 4, 5], defaultQuantity: 24, codePatterns: DEFAULT_CODE_PATTERNS } };
     const local = splitSnapshot(data, 'max-mueller', 'Max Müller').person;
     expect(local.name).toBe('Max Müller');
     const remote = { ...splitSnapshot(data, 'max-mueller').person };

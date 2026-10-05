@@ -1,11 +1,14 @@
+import { format } from 'date-fns';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { DateTimeField } from '../../components/DateTimeField';
+import { DeleteAction } from '../../components/DeleteAction';
 import { Button, Card } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
-import { formatDuration } from '../../domain/time';
+import { formatDuration, formatTime } from '../../domain/time';
+import { usePermissions } from '../../hooks/usePermissions';
 import { spacing, usePalette } from '../../theme';
 
 /** Einen Arbeitsabschnitt (Start/Ende) korrigieren oder löschen. */
@@ -13,13 +16,13 @@ export default function EntryScreen() {
   const p = usePalette();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { mutate } = useData();
+  const perms = usePermissions();
   const { data: entry } = useQuery((r) => r.entries.get(id), [id]);
 
   const [startAt, setStartAt] = useState(0);
   const [endAt, setEndAt] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (entry && !loaded) {
     setStartAt(entry.startAt);
@@ -40,14 +43,6 @@ export default function EntryScreen() {
     }
   };
 
-  const remove = async () => {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
-    await mutate((r) => r.entries.remove(id));
-    router.back();
-  };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -64,15 +59,15 @@ export default function EntryScreen() {
       </Card>
       {error && <Text style={{ color: p.danger }}>{error}</Text>}
       <Button title="Speichern" icon="checkmark" onPress={() => void save()} disabled={invalid} />
-      <View style={{ gap: spacing.sm }}>
-        <Button
-          title={confirmDelete ? 'Wirklich löschen?' : 'Abschnitt löschen'}
-          icon="trash-outline"
-          variant={confirmDelete ? 'danger' : 'secondary'}
-          onPress={() => void remove()}
-        />
-        {confirmDelete && <Button title="Abbrechen" variant="secondary" onPress={() => setConfirmDelete(false)} />}
-      </View>
+      <DeleteAction
+        kind="entry"
+        targetId={id}
+        owner={perms.me}
+        label={`Abschnitt ${formatTime(startAt)}${endAt ? ` – ${formatTime(endAt)}` : ''} am ${format(startAt, 'dd.MM.yyyy')}`}
+        title="Abschnitt löschen"
+        doDelete={(r) => r.entries.remove(id)}
+        onDone={() => router.back()}
+      />
     </ScrollView>
   );
 }

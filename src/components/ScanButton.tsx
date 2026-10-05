@@ -5,12 +5,17 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { radius, spacing, usePalette } from '../theme';
+import type { ScanKind } from './barcode.web';
 import { Button } from './ui';
 
-export const BARCODE_TYPES: BarcodeType[] = ['qr', 'code128', 'code39', 'code93', 'ean13', 'ean8', 'upc_a', 'upc_e', 'itf14', 'datamatrix'];
+/** Strichcodes (Aufträge, Artikel) bzw. QR-Codes (Einladungen) – die Kamera liest nur die gewählte Art. */
+export const BARCODE_TYPES: Record<ScanKind, BarcodeType[]> = {
+  barcode: ['code128', 'code39', 'code93', 'ean13', 'ean8', 'upc_a', 'upc_e', 'itf14', 'codabar'],
+  qr: ['qr'],
+};
 
 /** Kamera-Button: öffnet einen Vollbild-Scanner und liefert den ersten erkannten Code. */
-export function ScanButton({ label, onScan }: { label: string; onScan: (code: string) => void }) {
+export function ScanButton({ label, onScan, kind = 'barcode' }: { label: string; onScan: (code: string) => void; kind?: ScanKind }) {
   const p = usePalette();
   const [open, setOpen] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -46,7 +51,7 @@ export function ScanButton({ label, onScan }: { label: string; onScan: (code: st
               <CameraView
                 style={StyleSheet.absoluteFill}
                 facing="back"
-                barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
+                barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES[kind] }}
                 onBarcodeScanned={({ data }) => {
                   if (handled.current || !data) return;
                   handled.current = true;

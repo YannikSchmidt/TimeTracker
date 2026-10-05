@@ -1,5 +1,5 @@
 import type { BackupData, LegacyBackupData } from '../domain/legacy';
-import type { Article, Dimension, DimensionValue, Entry, Job, JobFields, JobKind, Millis, Settings } from '../domain/types';
+import type { Article, Dimension, DimensionValue, Entry, Job, JobFields, JobKind, Millis, Settings, DeletionKind, DeletionRequest, DeletionStatus } from '../domain/types';
 
 export type { BackupData, LegacyBackupData };
 
@@ -80,8 +80,26 @@ export interface SettingsRepository {
   set(input: Partial<Settings>): Promise<void>;
 }
 
+export interface DeletionRequestInput {
+  kind: DeletionKind;
+  targetId: string;
+  owner: string | null;
+  label: string;
+  reason: string;
+  /** Admin löscht etwas, das auf einem anderen Gerät gelöscht werden muss → gleich bestätigt */
+  status?: 'open' | 'approved';
+}
+
+export interface DeletionRequestRepository {
+  /** Alle (nicht gelöschten) Löschvorschläge, neueste zuerst */
+  list(): Promise<DeletionRequest[]>;
+  create(input: DeletionRequestInput): Promise<DeletionRequest>;
+  setStatus(id: string, status: DeletionStatus): Promise<void>;
+}
+
 export interface Repositories {
   jobs: JobRepository;
+  requests: DeletionRequestRepository;
   entries: EntryRepository;
   dimensions: DimensionRepository;
   articles: ArticleRepository;

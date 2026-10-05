@@ -1,4 +1,4 @@
-import type { Article, Dimension, DimensionValue, Entry, Job, Millis, Settings } from './types';
+import type { Article, DeletionRequest, Dimension, DimensionValue, Entry, Job, Millis, Settings } from './types';
 
 /** Eintrag im Format bis Version 1 (ein Eintrag = ein Timer mit allen Feldern). */
 export interface LegacyEntry {
@@ -27,6 +27,8 @@ export interface BackupData {
   settings: Settings;
   /** Zeitpunkt der letzten Änderung der Einstellungen (für den Abgleich zwischen Geräten) */
   settingsUpdatedAt?: Millis;
+  /** Löschvorschläge (gemeinsam) */
+  deletionRequests?: DeletionRequest[];
 }
 
 export interface LegacyBackupData {

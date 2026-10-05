@@ -50,3 +50,11 @@ export const VALUE_COLORS = [
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
 export const radius = { sm: 8, md: 12, lg: 16, pill: 999 };
+
+/** Feste Farbe pro Auftragsnummer – so sind Kacheln desselben Auftrags auf einen Blick erkennbar. */
+export function orderColor(orderNo: string | null | undefined): string | null {
+  if (!orderNo) return null;
+  let h = 0;
+  for (let i = 0; i < orderNo.length; i++) h = (h * 31 + orderNo.charCodeAt(i)) >>> 0;
+  return VALUE_COLORS[h % VALUE_COLORS.length];
+}

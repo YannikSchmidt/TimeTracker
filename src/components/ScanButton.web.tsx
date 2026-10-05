@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { radius, spacing, usePalette } from '../theme';
+import type { ScanKind } from './barcode.web';
 import { ScannerView } from './ScannerView';
 
 /** Kamera-Knopf (Browser): öffnet den Scanner (live oder per Foto) als Overlay. */
-export function ScanButton({ label, onScan }: { label: string; onScan: (code: string) => void }) {
+export function ScanButton({ label, onScan, kind = 'barcode' }: { label: string; onScan: (code: string) => void; kind?: ScanKind }) {
   const p = usePalette();
   const [open, setOpen] = useState(false);
 
@@ -32,6 +33,7 @@ export function ScanButton({ label, onScan }: { label: string; onScan: (code: st
             {open && (
               <ScannerView
                 hint={label}
+                kind={kind}
                 onScan={(code) => {
                   setOpen(false);
                   onScan(code);

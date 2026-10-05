@@ -205,6 +205,7 @@ export class TeamSync {
       applyLocal: (data) => {
         this.store.replace(data);
         this.dataListeners.forEach((l) => l());
+        void this.applyApprovedDeletions();
       },
       onTeam: (others) => this.setState({ others }),
       onStatus: (status) => this.setState({ status }),
@@ -225,6 +226,30 @@ export class TeamSync {
     if (this.pollTimer) clearInterval(this.pollTimer);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.onVisible);
     if (typeof window !== 'undefined') window.removeEventListener('online', this.onVisible);
+  }
+
+  // --- Löschvorschläge ----------------------------------------------------------
+
+  private applyingDeletions = false;
+
+  /** Vom Admin bestätigte Löschungen eigener Aufträge/Abschnitte ausführen (nur dieses Gerät schreibt die eigene Datei). */
+  private async applyApprovedDeletions() {
+    if (this.applyingDeletions || !this.login) return;
+    this.applyingDeletions = true;
+    try {
+      const repos = this.store.repos;
+      let changed = false;
+      for (const r of await repos.requests.list()) {
+        if (r.status !== 'approved' || r.owner !== this.login || r.kind === 'article') continue;
+        if (r.kind === 'job') await repos.jobs.remove(r.targetId).catch(() => {});
+        else await repos.entries.remove(r.targetId).catch(() => {});
+        await repos.requests.setStatus(r.id, 'done');
+        changed = true;
+      }
+      if (changed) this.dataListeners.forEach((l) => l());
+    } finally {
+      this.applyingDeletions = false;
+    }
   }
 
   // --- Verbesserungsvorschläge --------------------------------------------------
