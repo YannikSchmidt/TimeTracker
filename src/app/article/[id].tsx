@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { DeleteAction } from '../../components/DeleteAction';
+import { GroupPicker } from '../../components/GroupPicker';
 import { ScanButton } from '../../components/ScanButton';
 import { Button, Card, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
@@ -20,6 +21,7 @@ export default function ArticleScreen() {
   const [number, setNumber] = useState('');
   const [name, setName] = useState('');
   const [device, setDevice] = useState('');
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(isNew);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,12 +29,13 @@ export default function ArticleScreen() {
     setNumber(article.number);
     setName(article.name);
     setDevice(article.device);
+    setGroupId(article.groupId);
     setLoaded(true);
   }
 
   const save = async () => {
     try {
-      const input = { number, name, device };
+      const input = { number, name, device, groupId };
       await mutate(async (r) => {
         if (isNew) await r.articles.create(input);
         else await r.articles.update(id, input);
@@ -97,6 +100,10 @@ export default function ArticleScreen() {
             accessibilityLabel="Endgerät"
             style={[inputStyle, { minHeight: 80, textAlignVertical: 'top', paddingTop: spacing.md }]}
           />
+        </View>
+        <View>
+          <SectionTitle>Gruppe</SectionTitle>
+          <GroupPicker number={number} groupId={groupId} onChange={setGroupId} />
         </View>
       </Card>
 

@@ -17,6 +17,8 @@ interface JobRow {
   rework_reason: string | null;
   started_at: number;
   finished_at: number | null;
+  current_step: string | null;
+  only_step: string | null;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
@@ -38,6 +40,8 @@ function toJob(row: JobRow, valueIds: string[]): Job {
     finishedAt: row.finished_at,
     // Die native App speichert nur lokal (ohne Team-Sync)
     createdBy: null,
+    currentStep: row.current_step ?? null,
+    onlyStep: row.only_step ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
@@ -101,12 +105,13 @@ export class SqliteJobRepository implements JobRepository {
     );
   }
 
-  private async openEntry(jobId: string, now: Millis): Promise<void> {
+  private async openEntry(jobId: string, now: Millis, step: string | null): Promise<void> {
     await this.db.runAsync(
-      'INSERT INTO entries (id, job_id, start_at, end_at, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)',
+      'INSERT INTO entries (id, job_id, start_at, end_at, step, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?, ?)',
       newId(),
       jobId,
       now,
+      step,
       now,
       now,
     );
@@ -132,14 +137,16 @@ export class SqliteJobRepository implements JobRepository {
       startedAt,
       finishedAt,
       createdBy: null,
+      currentStep: input.onlyStep ?? input.currentStep ?? null,
+      onlyStep: input.onlyStep ?? null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
     };
     await this.db.runAsync(
       `INSERT INTO jobs (id, kind, status, article_id, order_no, quantity, note, parent_job_id, rework_reason,
-                         started_at, finished_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                         started_at, finished_at, current_step, only_step, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       job.id,
       job.kind,
       job.status,
@@ -151,6 +158,8 @@ export class SqliteJobRepository implements JobRepository {
       job.reworkReason,
       job.startedAt,
       job.finishedAt,
+      job.currentStep,
+      job.onlyStep,
       now,
       now,
     );
@@ -165,7 +174,7 @@ export class SqliteJobRepository implements JobRepository {
     await this.db.withTransactionAsync(async () => {
       await this.closeOpen(now);
       job = await this.insertJob(input, now, 'running', null);
-      await this.openEntry(job.id, now);
+      await this.openEntry(job.id, now, job.currentStep);
     });
     return job;
   }
@@ -182,8 +191,21 @@ export class SqliteJobRepository implements JobRepository {
     const now = Date.now();
     await this.db.withTransactionAsync(async () => {
       await this.closeOpen(now);
-      await this.openEntry(id, now);
+      await this.openEntry(id, now, job.currentStep);
       await this.db.runAsync("UPDATE jobs SET status = 'running', finished_at = NULL, updated_at = ? WHERE id = ?", now, id);
+    });
+  }
+
+  async nextStep(id: string, next: string | null): Promise<void> {
+    const job = await this.require(id);
+    const now = Date.now();
+    await this.db.withTransactionAsync(async () => {
+      await this.closeOpen(now, id);
+      await this.db.runAsync('UPDATE jobs SET current_step = ?, updated_at = ? WHERE id = ?', next, now, id);
+      if (job.status === 'running' && next) {
+        await this.openEntry(id, now, next);
+        await this.db.runAsync("UPDATE jobs SET status = 'running' WHERE id = ?", id);
+      }
     });
   }
 

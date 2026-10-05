@@ -24,6 +24,7 @@ export function JobCard({
   entries,
   article,
   reworks = [],
+  steps = [],
   now,
 }: {
   job: Job;
@@ -31,6 +32,8 @@ export function JobCard({
   article?: Article;
   /** offene Nacharbeiten zu diesem Auftrag */
   reworks?: SubJob[];
+  /** Ablauf des Artikels (Arbeitsschritte in Reihenfolge) */
+  steps?: string[];
   now: number;
 }) {
   const p = usePalette();
@@ -42,6 +45,10 @@ export function JobCard({
   const color = orderColor(job.orderNo) ?? p.muted;
   const state = rework ? p.warning : running ? p.success : p.muted;
   const name = jobName(job, article);
+  const step = job.kind === 'order' ? job.currentStep : null;
+  const stepIndex = step ? steps.indexOf(step) : -1;
+  const next = !job.onlyStep && stepIndex >= 0 ? (steps[stepIndex + 1] ?? null) : null;
+  const stepTime = step ? entries.filter((e) => e.step === step && !e.deletedAt).reduce((s, e) => s + ((e.endAt ?? now) - e.startAt), 0) : 0;
   const details = [...(article ? articleDetails(article) : []), job.quantity != null ? `${job.quantity} Stk` : '']
     .filter(Boolean)
     .join(' · ');
@@ -89,6 +96,28 @@ export function JobCard({
             <Text style={{ color: p.muted, fontSize: 12 }}>Arbeitszeit · gesamt {formatDuration(t.totalMs)}</Text>
           </View>
         </Pressable>
+        {step && (
+          <View style={[styles.step, { backgroundColor: color + '14', borderColor: color + '55' }]}>
+            <Text style={{ color: p.muted, fontSize: 12 }}>
+              {job.onlyStep ? 'Nur dieser Schritt' : stepIndex >= 0 ? `Schritt ${stepIndex + 1} von ${steps.length}` : 'Schritt'}
+            </Text>
+            <View style={styles.stepRow}>
+              <Text style={{ color: p.text, fontSize: 18, fontWeight: '700', flex: 1 }} numberOfLines={1}>
+                {step}
+              </Text>
+              <Text style={{ color: p.muted, fontVariant: ['tabular-nums'] }}>{formatClock(stepTime)}</Text>
+            </View>
+            {next && (
+              <Button
+                title={`${step} fertig → ${next}`}
+                icon="checkmark-done"
+                variant="success"
+                onPress={() => void actions.nextStep(job, next)}
+                accessibilityLabel={`${step} fertig, weiter mit ${next}`}
+              />
+            )}
+          </View>
+        )}
         <View style={styles.buttons}>
           <View style={{ flex: 2 }}>
             {running ? (
@@ -160,5 +189,7 @@ const styles = StyleSheet.create({
   buttons: { flexDirection: 'row', gap: spacing.sm },
   sub: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: radius.md, padding: spacing.sm },
   subClock: { fontSize: 22, fontWeight: '300', fontVariant: ['tabular-nums'] },
+  step: { borderWidth: 1, borderRadius: radius.md, padding: spacing.sm, gap: spacing.xs },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   reworkLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 4 },
 });

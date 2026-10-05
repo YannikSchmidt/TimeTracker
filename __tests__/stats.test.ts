@@ -26,6 +26,7 @@ function entry(start: string, end: string | null, valueIds: string[] = []): Segm
     jobStartedAt: at(start),
     startAt: at(start),
     endAt: end ? at(end) : null,
+    step: null,
     note: '',
     valueIds,
     articleId: null,

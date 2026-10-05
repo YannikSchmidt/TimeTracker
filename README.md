@@ -19,6 +19,9 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
   Einstellungen änderbar) und fragt, ob die nächste Nummer gescannt werden soll. Ist der Auftrag schon bekannt, werden
   Artikel und Stückzahl übernommen. Eintippen (Nummer oder Bezeichnung) und „ohne Auftrag/Artikel“ gehen jederzeit;
   Artikel lassen sich auch nur mit Bezeichnung anlegen.
+- **Arbeitsschritte**: Gesamtgeräte und Fronten mit Untergruppen; jede Gruppe hat einen frei bearbeitbaren Ablauf
+  (z.B. Teile holen → Gesamtmontage → Prüfen). Im Timer schließt „Schritt fertig“ den Schritt ab und startet den
+  nächsten; die Zeit pro Schritt steht im Auftrag. Beim Start kann auch nur ein einzelner Schritt getrackt werden.
 - **Vorschläge aus früheren Eingaben**: zuletzt verwendete Auftragsnummern, häufige Artikel, Stückzahl
   (häufigste des Artikels, sonst Standard 24 – einstellbar) und bisherige Nacharbeitsgründe.
 - **Nacharbeit**: eigener Timer zu einem Auftrag (offen oder abgeschlossen). Beim Beenden wird der Grund
@@ -27,7 +30,8 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
   Pausen und die Nacharbeit.
 - **Verlauf**: Aufträge nach Tag mit Arbeitszeit, Gesamtzeit und Nacharbeit; Arbeitsabschnitte einzeln korrigierbar,
   Aufträge nachtragbar.
-- **Artikel**: eigener Tab mit Suche, Scan, Nummer, Benennung und Endgerät (freie Notiz). Beim Start lässt sich
+- **Artikel**: eigener Tab, getrennt nach Gesamtgeräten, Fronten und Sonstigen; Suche, Scan, Nummer, Benennung,
+  Endgerät (freie Notiz) und Untergruppe. Beim Start lässt sich
   der Artikel auch über die Benennung suchen.
 - **Timer-Namen** aus Auftragsnummer und Benennung, z.B. „A-2026-0815 · Halter links“.
 - **Statistik** (Woche/Monat/Jahr): Arbeitszeit inkl. Anteil Nacharbeit, Soll/Ist, Aufträge, Verteilung nach

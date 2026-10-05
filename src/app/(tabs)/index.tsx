@@ -12,6 +12,7 @@ import { jobName, reworkOf } from '../../domain/jobs';
 import { totalMs } from '../../domain/stats';
 import { formatDuration } from '../../domain/time';
 import { useArticles } from '../../hooks/useArticles';
+import { useGroups } from '../../hooks/useGroups';
 import { useJobActions } from '../../hooks/useJobActions';
 import { useNow } from '../../hooks/useNow';
 import { useWork } from '../../hooks/useWork';
@@ -22,6 +23,7 @@ export default function TimerScreen() {
   const p = usePalette();
   const work = useWork();
   const articles = useArticles();
+  const groups = useGroups();
   const actions = useJobActions();
   const now = useNow(1000);
 
@@ -77,6 +79,7 @@ export default function TimerScreen() {
               entries={work.entriesOf.get(job.id) ?? []}
               article={job.articleId ? articles.byId.get(job.articleId) : undefined}
               reworks={reworks.map((r) => ({ job: r, entries: work.entriesOf.get(r.id) ?? [] }))}
+              steps={groups.flowOf(job.articleId ? articles.byId.get(job.articleId) : undefined).steps}
               now={now}
             />
           ))

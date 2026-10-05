@@ -3,23 +3,19 @@ import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { DateTimeField } from '../../components/DateTimeField';
-import {
-  ArticleField,
-  OrderField,
-  QuantityField,
-  parseQuantity,
-  type ArticleFieldHandle,
-} from '../../components/EntryFields';
+import { ArticleField, OrderField, QuantityField, parseQuantity, type ArticleFieldHandle } from '../../components/EntryFields';
 import { DimensionPicker } from '../../components/ValuePicker';
 import { DeleteAction } from '../../components/DeleteAction';
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData } from '../../data/DataProvider';
+import { timeByStep } from '../../domain/flows';
 import { jobName, jobTimes, reworkOf } from '../../domain/jobs';
 import { reworkReasons } from '../../domain/suggestions';
 import { formatClock, formatDuration, formatTime } from '../../domain/time';
 import type { Job } from '../../domain/types';
 import { articleLabel, useArticles } from '../../hooks/useArticles';
 import { useDimensions } from '../../hooks/useDimensions';
+import { useGroups } from '../../hooks/useGroups';
 import { useJobActions } from '../../hooks/useJobActions';
 import { useNow } from '../../hooks/useNow';
 import { useWork } from '../../hooks/useWork';
@@ -36,6 +32,7 @@ export default function JobScreen() {
   const work = useWork();
   const dims = useDimensions();
   const articles = useArticles();
+  const groups = useGroups();
   const actions = useJobActions();
   const now = useNow(1000);
   const articleRef = useRef<ArticleFieldHandle>(null);
@@ -92,13 +89,14 @@ export default function JobScreen() {
     }
   };
 
-
   const entries = job ? (work.all.entriesOf.get(job.id) ?? []) : [];
   const times = job ? jobTimes(job, entries, now) : null;
   const reworks = job ? reworkOf(job.id, work.all.jobs, work.all.entries, now) : [];
   const reworkMs = reworks.reduce((s, r) => s + r.workMs, 0);
   const parent = job?.parentJobId ? work.all.jobsById.get(job.parentJobId) : undefined;
   const isRework = job?.kind === 'rework';
+  const flow = groups.flowOf(job?.articleId ? articles.byId.get(job.articleId) : undefined);
+  const stepTimes = job ? timeByStep(entries, flow.steps, now).filter((s) => s.step !== null || entries.some((e) => e.step)) : [];
   const articleOf = (j: { articleId: string | null }) => (j.articleId ? articles.byId.get(j.articleId) : undefined);
 
   return (
@@ -113,10 +111,17 @@ export default function JobScreen() {
           <View style={styles.statRow}>
             <Stat label="Gesamtzeit" value={formatDuration(times.totalMs)} hint="erster Start bis Abschluss" />
             <Stat label="Pausen" value={formatDuration(times.pausedMs)} />
-            {!isRework && <Stat label="Nacharbeit" value={reworkMs > 0 ? formatDuration(reworkMs) : '–'} color={reworkMs > 0 ? p.warning : undefined} />}
+            {!isRework && (
+              <Stat
+                label="Nacharbeit"
+                value={reworkMs > 0 ? formatDuration(reworkMs) : '–'}
+                color={reworkMs > 0 ? p.warning : undefined}
+              />
+            )}
           </View>
           <Text style={{ color: p.muted, fontSize: 12 }}>
-            {formatTime(times.firstStart)} – {job.finishedAt ? formatTime(job.finishedAt) : job.status === 'running' ? 'läuft' : 'pausiert'}
+            {formatTime(times.firstStart)} –{' '}
+            {job.finishedAt ? formatTime(job.finishedAt) : job.status === 'running' ? 'läuft' : 'pausiert'}
             {parent ? `  ·  Nacharbeit zu ${jobName(parent, articleOf(parent))}` : ''}
           </Text>
           {readOnly ? (
@@ -127,6 +132,29 @@ export default function JobScreen() {
             <JobButtons job={job} actions={actions} onReopen={() => mutate((r) => r.jobs.reopen(job.id))} />
           )}
           {done === '1' && <Button title="Fertig" variant="secondary" onPress={() => router.back()} />}
+        </Card>
+      )}
+
+      {job && stepTimes.length > 0 && (
+        <Card style={{ gap: spacing.sm }}>
+          <SectionTitle>Arbeitsschritte{job.onlyStep ? ' (nur ein Schritt)' : ''}</SectionTitle>
+          {stepTimes.map((s) => {
+            const current = s.step === job.currentStep && job.status !== 'done';
+            return (
+              <View key={s.step ?? '-'} style={styles.stepRow}>
+                <Text style={{ color: current ? p.primary : p.text, flex: 1, fontWeight: current ? '700' : '400' }}>
+                  {s.step ?? 'ohne Schritt'}
+                  {current ? '  ← aktuell' : ''}
+                </Text>
+                <Text style={{ color: p.text, fontVariant: ['tabular-nums'] }}>{formatDuration(s.ms)}</Text>
+              </View>
+            );
+          })}
+          {flow.steps.filter((s) => !stepTimes.some((t) => t.step === s)).length > 0 && !job.onlyStep && (
+            <Text style={{ color: p.muted, fontSize: 12 }}>
+              Noch offen: {flow.steps.filter((s) => !stepTimes.some((t) => t.step === s)).join(', ')}
+            </Text>
+          )}
         </Card>
       )}
 
@@ -213,7 +241,12 @@ export default function JobScreen() {
 
           {error && <Text style={{ color: p.danger }}>{error}</Text>}
           {saved && <Text style={{ color: p.success }}>Gespeichert.</Text>}
-          <Button title={isNew ? 'Nachtragen' : 'Änderungen speichern'} icon="checkmark" onPress={() => void save()} disabled={isNew && endAt <= startAt} />
+          <Button
+            title={isNew ? 'Nachtragen' : 'Änderungen speichern'}
+            icon="checkmark"
+            onPress={() => void save()}
+            disabled={isNew && endAt <= startAt}
+          />
         </>
       )}
 
@@ -254,15 +287,7 @@ export default function JobScreen() {
   );
 }
 
-function JobButtons({
-  job,
-  actions,
-  onReopen,
-}: {
-  job: Job;
-  actions: ReturnType<typeof useJobActions>;
-  onReopen: () => void;
-}) {
+function JobButtons({ job, actions, onReopen }: { job: Job; actions: ReturnType<typeof useJobActions>; onReopen: () => void }) {
   if (job.status === 'done') {
     return (
       <View style={styles.buttonRow}>
@@ -287,7 +312,12 @@ function JobButtons({
         )}
       </View>
       <View style={{ flex: 1 }}>
-        <Button title="Fertig" icon="checkmark" variant={job.kind === 'rework' ? 'warning' : 'primary'} onPress={() => void actions.finish(job)} />
+        <Button
+          title="Fertig"
+          icon="checkmark"
+          variant={job.kind === 'rework' ? 'warning' : 'primary'}
+          onPress={() => void actions.finish(job)}
+        />
       </View>
     </View>
   );
@@ -315,6 +345,7 @@ function Stat({ label, value, hint, color }: { label: string; value: string; hin
 }
 
 const styles = StyleSheet.create({
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 4 },
   container: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xl * 2 },
   summary: { gap: spacing.sm },
   doneBadge: { fontWeight: '800', fontSize: 16 },

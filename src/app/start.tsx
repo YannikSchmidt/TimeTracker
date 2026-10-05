@@ -12,6 +12,7 @@ import { suggestQuantity } from '../domain/quantity';
 import { frequentArticles, knownOrders, lastJobForOrder, recentOrders } from '../domain/suggestions';
 import type { Article } from '../domain/types';
 import { articleLabel, findArticleByName, matchArticles, useArticles } from '../hooks/useArticles';
+import { useGroups } from '../hooks/useGroups';
 import { useWork } from '../hooks/useWork';
 import { radius, spacing, usePalette } from '../theme';
 
@@ -33,6 +34,7 @@ export default function StartScreen() {
   const { mutate } = useData();
   const work = useWork();
   const articles = useArticles();
+  const groups = useGroups();
   const patterns = work.settings.codePatterns;
 
   const [phase, setPhase] = useState<Phase>('scan');
@@ -49,6 +51,8 @@ export default function StartScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  /** nur diesen Arbeitsschritt tracken (null = ganzer Ablauf) */
+  const [onlyStep, setOnlyStep] = useState<string | null>(null);
   /** wechselt bei jedem neuen Scan-Schritt → Scanner startet neu */
   const [scanRound, setScanRound] = useState(0);
 
@@ -99,6 +103,7 @@ export default function StartScreen() {
 
   const applyArticle = (id: string) => {
     setArticleId(id);
+    setOnlyStep(null);
     setSkipArticle(false);
     advance({ ...state(), article: id, skipArticle: false });
   };
@@ -149,7 +154,10 @@ export default function StartScreen() {
     if (starting) return;
     setStarting(true);
     try {
-      await mutate((r) => r.jobs.start({ orderNo, articleId, quantity: parseQuantity(quantity) }));
+      const steps = groups.flowOf(article).steps;
+      await mutate((r) =>
+        r.jobs.start({ orderNo, articleId, quantity: parseQuantity(quantity), currentStep: steps[0] ?? null, onlyStep }),
+      );
       router.back();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -329,6 +337,20 @@ export default function StartScreen() {
             <QuantityField value={quantity} onChange={setQuantity} />
             {quantityHint ? <Text style={{ color: p.muted, textAlign: 'center' }}>Vorschlag: {quantityHint}</Text> : null}
           </View>
+          {groups.flowOf(article).steps.length > 0 && (
+            <View style={{ gap: spacing.sm }}>
+              <SectionTitle>Arbeitsschritte</SectionTitle>
+              <View style={styles.chips}>
+                <Chip label={`Ganzer Ablauf (${groups.flowOf(article).steps.length})`} selected={!onlyStep} onPress={() => setOnlyStep(null)} />
+                {groups.flowOf(article).steps.map((s) => (
+                  <Chip key={s} label={`Nur ${s}`} selected={onlyStep === s} onPress={() => setOnlyStep(s)} />
+                ))}
+              </View>
+              <Text style={{ color: p.muted, fontSize: 12 }}>
+                {onlyStep ? `Es wird nur „${onlyStep}“ getrackt – z.B. beim Aushelfen.` : `Start mit „${groups.flowOf(article).steps[0]}“, weiter per „Schritt fertig“.`}
+              </Text>
+            </View>
+          )}
           <Button title="Start" icon="play" variant="success" size="large" onPress={() => void start()} disabled={starting} />
         </>
       )}

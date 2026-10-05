@@ -26,6 +26,7 @@ export default function RootLayout() {
           <Stack.Screen name="article/[id]" options={{ presentation: 'modal', title: 'Artikel' }} />
           <Stack.Screen name="invite" options={{ presentation: 'modal', title: 'Kollegen einladen' }} />
           <Stack.Screen name="join" options={{ title: 'Einladung' }} />
+          <Stack.Screen name="flows" options={{ title: 'Abläufe' }} />
           <Stack.Screen name="feedback" options={{ presentation: 'modal', title: 'Verbesserung vorschlagen' }} />
         </Stack>
       </StorageRoot>
