@@ -11,6 +11,7 @@ import {
   type ArticleFieldHandle,
 } from '../../components/EntryFields';
 import { DimensionPicker } from '../../components/ValuePicker';
+import { DeleteAction } from '../../components/DeleteAction';
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData } from '../../data/DataProvider';
 import { jobName, jobTimes, reworkOf } from '../../domain/jobs';
@@ -53,7 +54,6 @@ export default function JobScreen() {
   const [endAt, setEndAt] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (job && !loaded) {
     setOrderNo(job.orderNo ?? '');
@@ -92,14 +92,6 @@ export default function JobScreen() {
     }
   };
 
-  const remove = async () => {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
-    await mutate((r) => r.jobs.remove(id));
-    router.back();
-  };
 
   const entries = job ? (work.all.entriesOf.get(job.id) ?? []) : [];
   const times = job ? jobTimes(job, entries, now) : null;
@@ -245,21 +237,18 @@ export default function JobScreen() {
         </Card>
       )}
 
-      {job && !readOnly && (
-        <View style={{ gap: spacing.sm }}>
-          <Button
-            title={confirmDelete ? 'Wirklich löschen?' : 'Auftrag löschen'}
-            icon="trash-outline"
-            variant={confirmDelete ? 'danger' : 'secondary'}
-            onPress={() => void remove()}
-          />
-          {confirmDelete && (
-            <>
-              <Text style={{ color: p.muted, fontSize: 12 }}>Löscht auch alle Abschnitte und Nacharbeiten dieses Auftrags.</Text>
-              <Button title="Abbrechen" variant="secondary" onPress={() => setConfirmDelete(false)} />
-            </>
-          )}
-        </View>
+      {job && !isNew && (
+        <DeleteAction
+          kind="job"
+          targetId={job.id}
+          owner={work.ownerOf(job)}
+          ownerName={work.nameOf(work.ownerOf(job))}
+          label={jobName(job, articleOf(job))}
+          title={isRework ? 'Nacharbeit löschen' : 'Auftrag löschen'}
+          hint="Löscht auch alle Abschnitte und Nacharbeiten dieses Auftrags."
+          doDelete={(r) => r.jobs.remove(job.id)}
+          onDone={() => router.back()}
+        />
       )}
     </ScrollView>
   );

@@ -12,9 +12,10 @@ export function validateQuantity(quantity: number | null | undefined): void {
   }
 }
 
-export function normalizeArticleNumber(number: string): string {
+/** Artikelnummer bereinigen. Leer ist erlaubt, wenn der Artikel eine Benennung hat („nur mit Bezeichnung“). */
+export function normalizeArticleNumber(number: string, name = ''): string {
   const trimmed = number.trim();
-  if (!trimmed) throw new Error('Bitte eine Artikelnummer angeben.');
+  if (!trimmed && !name.trim()) throw new Error('Bitte eine Artikelnummer oder Benennung angeben.');
   return trimmed;
 }
 

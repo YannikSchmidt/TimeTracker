@@ -1,3 +1,5 @@
+import { DEFAULT_CODE_PATTERNS, type CodePatterns } from './codes';
+
 /** Zeitstempel sind immer Millisekunden seit Epoch (UTC). */
 export type Millis = number;
 
@@ -98,16 +100,40 @@ export interface Settings {
   workDays: number[];
   /** Vorschlag für die Stückzahl, solange ein Artikel noch keine Historie hat */
   defaultQuantity: number;
+  /** Muster zum Erkennen gescannter Nummern (Auftrag / Gesamtgerät / Front) */
+  codePatterns: CodePatterns;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   weeklyTargetHours: 40,
   workDays: [1, 2, 3, 4, 5],
   defaultQuantity: 24,
+  codePatterns: DEFAULT_CODE_PATTERNS,
 };
 
 /** Halboffenes Intervall [start, end) */
 export interface Range {
   start: Millis;
   end: Millis;
+}
+
+export type DeletionKind = 'article' | 'job' | 'entry';
+export type DeletionStatus = 'open' | 'approved' | 'rejected' | 'done';
+
+/**
+ * Löschvorschlag: Nur Admins löschen; alle anderen schlagen vor. Bestätigte Löschungen von Aufträgen/Abschnitten
+ * führt das Gerät der Besitzerin/des Besitzers aus (nur sie schreibt in ihre Datei).
+ */
+export interface DeletionRequest extends SyncMeta {
+  id: string;
+  kind: DeletionKind;
+  targetId: string;
+  /** Besitzer des Auftrags/Abschnitts (Kennung), bei Artikeln null */
+  owner: string | null;
+  /** Anzeigetext, z.B. „2612345 · Halter links“ */
+  label: string;
+  reason: string;
+  requestedBy: string | null;
+  status: DeletionStatus;
+  decidedBy: string | null;
 }

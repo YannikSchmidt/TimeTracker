@@ -3,6 +3,7 @@ import { useImperativeHandle, useState, type Ref } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useData } from '../data/DataProvider';
+import { looksLikeNumber } from '../domain/codes';
 import { articleLabel, findArticleByName, matchArticles, type ArticlesData } from '../hooks/useArticles';
 import { radius, spacing, usePalette } from '../theme';
 import { ScanButton } from './ScanButton';
@@ -47,9 +48,10 @@ export function ArticleField({
     onChange(id);
   };
 
-  const create = async (number: string) => {
+  /** Neu anlegen: mit Nummer (gescannt/getippt) oder nur mit Bezeichnung */
+  const create = async (number: string, name = '') => {
     try {
-      const article = await mutate((r) => r.articles.create({ number, name: '', device: '' }));
+      const article = await mutate((r) => r.articles.create({ number, name, device: '' }));
       select(article.id);
       return true;
     } catch (e) {
@@ -58,7 +60,7 @@ export function ArticleField({
     }
   };
 
-  const findExact = (number: string) => articles.articles.find((a) => a.number === number.trim());
+  const findExact = (number: string) => (number.trim() ? articles.articles.find((a) => a.number === number.trim()) : undefined);
 
   const commit = async () => {
     const number = text.trim();
@@ -130,10 +132,17 @@ export function ArticleField({
       {unknown && !looksLikeNumber(unknown) ? (
         <View style={[styles.warn, { borderColor: p.danger, backgroundColor: p.danger + '12' }]}>
           <Text style={{ color: p.text }}>
-            Kein Artikel mit der Benennung <Text style={{ fontWeight: '700' }}>{unknown}</Text>. Bitte einen Vorschlag
-            wählen oder die Artikelnummer eingeben.
+            Keinen Artikel „<Text style={{ fontWeight: '700' }}>{unknown}</Text>“ gefunden. Nur mit Bezeichnung anlegen
+            (ohne Artikelnummer)?
           </Text>
-          <Button title="Korrigieren" variant="secondary" onPress={() => setUnknown(null)} />
+          <View style={styles.warnButtons}>
+            <View style={{ flex: 1 }}>
+              <Button title="Korrigieren" variant="secondary" onPress={() => setUnknown(null)} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button title="Nur mit Bezeichnung anlegen" icon="add" onPress={() => void create('', unknown)} />
+            </View>
+          </View>
         </View>
       ) : unknown ? (
         <View style={[styles.warn, { borderColor: p.danger, backgroundColor: p.danger + '12' }]}>
@@ -173,11 +182,6 @@ export function ArticleField({
       {error && <Text style={{ color: p.danger }}>{error}</Text>}
     </View>
   );
-}
-
-/** Getippter Text sieht wie eine Artikelnummer aus (Ziffern, keine Leerzeichen) → Anlegen anbieten. */
-function looksLikeNumber(text: string): boolean {
-  return /\d/.test(text) && !/\s/.test(text.trim());
 }
 
 /** Auftragsnummer eingeben oder scannen. */

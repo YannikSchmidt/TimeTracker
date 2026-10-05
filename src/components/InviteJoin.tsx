@@ -64,7 +64,7 @@ export function InviteJoin({ initialInvite, onDone }: { initialInvite?: string |
   if (!invite) {
     return (
       <View style={{ gap: spacing.md }}>
-        <ScannerView hint="Einladungs-QR-Code scannen" onScan={take} />
+        <ScannerView hint="Einladungs-QR-Code scannen" kind="qr" onScan={take} />
         <Text style={{ color: p.muted }}>
           Den QR-Code bekommst du von der Person, die das Team eingerichtet hat (Einstellungen → Kollegen einladen).
         </Text>

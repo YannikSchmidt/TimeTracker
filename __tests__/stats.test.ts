@@ -1,3 +1,4 @@
+import { DEFAULT_CODE_PATTERNS } from '../src/domain/codes';
 import {
   bucketTotals,
   computeKpis,
@@ -34,7 +35,7 @@ function entry(start: string, end: string | null, valueIds: string[] = []): Segm
   };
 }
 
-const settings: Settings = { weeklyTargetHours: 40, workDays: [1, 2, 3, 4, 5], defaultQuantity: 24 };
+const settings: Settings = { weeklyTargetHours: 40, workDays: [1, 2, 3, 4, 5], defaultQuantity: 24, codePatterns: DEFAULT_CODE_PATTERNS };
 
 // Woche Mo 02.03.2026 – So 08.03.2026
 const week = periodRange('week', at('2026-03-04T12:00'));

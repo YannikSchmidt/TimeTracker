@@ -3,7 +3,7 @@ import { createElement, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { radius, spacing, usePalette } from '../theme';
-import { decodeImage, decodeVideoFrame } from './barcode.web';
+import { decodeImage, decodeVideoFrame, type ScanKind } from './barcode.web';
 
 /** onScan kann false liefern, um den Code zu ignorieren und weiter zu scannen. */
 export type ScanHandler = (code: string) => boolean | void;
@@ -12,23 +12,25 @@ export type ScanHandler = (code: string) => boolean | void;
  * Scanner im Browser: Live-Kamera, sobald der Browser sie erlaubt.
  * Wo das nicht geht (keine Kamera, verweigert, eingebettete Seite), wird ein Foto ausgewertet.
  */
-export function ScannerView({ hint, onScan }: { hint: string; onScan: ScanHandler }) {
+export function ScannerView({ hint, onScan, kind = 'barcode' }: { hint: string; onScan: ScanHandler; kind?: ScanKind }) {
   const [mode, setMode] = useState<'live' | 'photo'>(() =>
     typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function' ? 'live' : 'photo',
   );
   return mode === 'live' ? (
-    <LiveScanner hint={hint} onScan={onScan} onUnavailable={() => setMode('photo')} />
+    <LiveScanner hint={hint} kind={kind} onScan={onScan} onUnavailable={() => setMode('photo')} />
   ) : (
-    <PhotoScanner hint={hint} onScan={onScan} />
+    <PhotoScanner hint={hint} kind={kind} onScan={onScan} />
   );
 }
 
 function LiveScanner({
   hint,
+  kind,
   onScan,
   onUnavailable,
 }: {
   hint: string;
+  kind: ScanKind;
   onScan: ScanHandler;
   onUnavailable: () => void;
 }) {
@@ -48,7 +50,7 @@ function LiveScanner({
 
     const scanLoop = async () => {
       if (stopped || !video.current) return;
-      const code = await decodeVideoFrame(video.current, canvas).catch(() => null);
+      const code = await decodeVideoFrame(video.current, canvas, kind).catch(() => null);
       if (stopped) return;
       if (code?.trim()) {
         stopped = true;
@@ -78,7 +80,7 @@ function LiveScanner({
       if (timer) clearTimeout(timer);
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, []);
+  }, [kind]);
 
   return (
     <View style={styles.liveBox}>
@@ -91,7 +93,7 @@ function LiveScanner({
         style: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' },
       })}
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}>
-        {ready ? <View style={styles.frame} /> : <ActivityIndicator color="#fff" size="large" />}
+        {ready ? <View style={kind === 'barcode' ? styles.barFrame : styles.frame} /> : <ActivityIndicator color="#fff" size="large" />}
         <Text style={styles.liveHint}>{ready ? hint : 'Kamera wird gestartet …'}</Text>
       </View>
       <Pressable
@@ -107,7 +109,7 @@ function LiveScanner({
   );
 }
 
-function PhotoScanner({ hint, onScan }: { hint: string; onScan: ScanHandler }) {
+function PhotoScanner({ hint, kind, onScan }: { hint: string; kind: ScanKind; onScan: ScanHandler }) {
   const p = usePalette();
   const input = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -118,7 +120,7 @@ function PhotoScanner({ hint, onScan }: { hint: string; onScan: ScanHandler }) {
     setBusy(true);
     setError(null);
     try {
-      const code = await decodeImage(file);
+      const code = await decodeImage(file, kind);
       if (code?.trim()) {
         if (onScan(code.trim()) === false) setError('Das war derselbe Code wie eben – bitte den anderen Code fotografieren.');
       } else setError('Kein Code erkannt – bitte näher und scharf fotografieren.');
@@ -164,6 +166,7 @@ const styles = StyleSheet.create({
   liveBox: { height: 300, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: '#000' },
   center: { alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   frame: { width: '65%', aspectRatio: 1, borderWidth: 3, borderColor: '#fff', borderRadius: radius.lg },
+  barFrame: { width: '88%', aspectRatio: 2.4, borderWidth: 3, borderColor: '#fff', borderRadius: radius.md },
   liveHint: { color: '#fff', fontSize: 15, fontWeight: '600', textShadowColor: '#000', textShadowRadius: 4 },
   switch: {
     position: 'absolute',

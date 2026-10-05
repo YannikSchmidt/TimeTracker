@@ -92,6 +92,14 @@ fragt nach („Bist du das auf einem weiteren Gerät?“) und führt die Daten z
 - Artikel und Merkmale (Projekt, Tags, …) sind gemeinsam und von allen änderbar.
 - Vorschläge (Aufträge, Artikel, Stückzahl, Nacharbeitsgründe) nutzen die Eingaben des ganzen Teams.
 
+## Admin und Löschen
+
+Löschen dürfen nur Admins (Liste `ADMINS` in `src/sync/config.ts`, derzeit `YannikSchmidt`). Alle anderen sehen
+„… löschen (vorschlagen)“ und geben einen Grund an. Unter *Einstellungen* → *Löschvorschläge* entscheidet der Admin
+(*Löschen* / *Ablehnen*). Artikel löscht der Admin sofort; Aufträge anderer Personen werden beim nächsten Abgleich auf
+deren Gerät gelöscht (nur sie schreiben in ihre eigene Datei). Die Regel gilt in der App – technisch könnte jemand mit
+Team-Passwort und Token sie umgehen.
+
 ## Verbesserungsvorschläge
 
 In der App: *Timer* → ganz unten „Verbesserung vorschlagen“ (oder *Einstellungen* → *Feedback*). Kategorie wählen

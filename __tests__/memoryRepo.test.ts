@@ -1,3 +1,4 @@
+import { DEFAULT_CODE_PATTERNS } from '../src/domain/codes';
 import { createMemoryRepositories } from '../src/repositories/memory';
 import type { BackupData, LegacyBackupData } from '../src/repositories/types';
 
@@ -118,7 +119,7 @@ it('alte Stände (Version 1) werden in Aufträge umgewandelt', async () => {
     ],
     dimensions: [],
     values: [],
-    settings: { weeklyTargetHours: 40, workDays: [1], defaultQuantity: 24 },
+    settings: { weeklyTargetHours: 40, workDays: [1], defaultQuantity: 24, codePatterns: DEFAULT_CODE_PATTERNS },
   };
   const { repos } = setup(legacy);
   const jobs = await repos.jobs.listAll();

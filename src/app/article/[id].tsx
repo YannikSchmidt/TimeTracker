@@ -2,9 +2,11 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { DeleteAction } from '../../components/DeleteAction';
 import { ScanButton } from '../../components/ScanButton';
 import { Button, Card, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
+import { articleLabel } from '../../hooks/useArticles';
 import { radius, spacing, usePalette } from '../../theme';
 
 /** Artikel bearbeiten (`/article/<id>`) oder anlegen (`/article/new`). */
@@ -20,7 +22,6 @@ export default function ArticleScreen() {
   const [device, setDevice] = useState('');
   const [loaded, setLoaded] = useState(isNew);
   const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (article && !loaded) {
     setNumber(article.number);
@@ -42,14 +43,6 @@ export default function ArticleScreen() {
     }
   };
 
-  const remove = async () => {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
-    await mutate((r) => r.articles.remove(id));
-    router.back();
-  };
 
   if (!loaded) return null;
 
@@ -68,7 +61,7 @@ export default function ArticleScreen() {
                 setNumber(t);
                 setError(null);
               }}
-              placeholder="z.B. 4711-200"
+              placeholder="z.B. 07123456 – leer lassen, wenn es keine gibt"
               placeholderTextColor={p.muted}
               autoCapitalize="characters"
               autoCorrect={false}
@@ -108,24 +101,18 @@ export default function ArticleScreen() {
       </Card>
 
       {error && <Text style={{ color: p.danger }}>{error}</Text>}
-      <Button title="Speichern" icon="checkmark" onPress={() => void save()} disabled={!number.trim()} />
-      {!isNew && (
-        <View style={{ gap: spacing.sm }}>
-          <Button
-            title={confirmDelete ? 'Wirklich löschen?' : 'Löschen'}
-            icon="trash-outline"
-            variant={confirmDelete ? 'danger' : 'secondary'}
-            onPress={() => void remove()}
-          />
-          {confirmDelete && (
-            <>
-              <Text style={{ color: p.muted, fontSize: 12 }}>
-                Einträge mit diesem Artikel bleiben erhalten, verlieren aber die Zuordnung.
-              </Text>
-              <Button title="Abbrechen" variant="secondary" onPress={() => setConfirmDelete(false)} />
-            </>
-          )}
-        </View>
+      <Button title="Speichern" icon="checkmark" onPress={() => void save()} disabled={!number.trim() && !name.trim()} />
+      {!isNew && article && (
+        <DeleteAction
+          kind="article"
+          targetId={article.id}
+          owner={null}
+          label={articleLabel(article)}
+          title="Artikel löschen"
+          hint="Aufträge mit diesem Artikel bleiben erhalten, verlieren aber die Zuordnung."
+          doDelete={(r) => r.articles.remove(article.id)}
+          onDone={() => router.back()}
+        />
       )}
     </ScrollView>
   );
