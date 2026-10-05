@@ -1,5 +1,5 @@
 import { DEFAULT_CODE_PATTERNS } from '../src/domain/codes';
-import { cleanSteps, flowOf, mainGroupOf, MAIN_GROUP_ID, nextStep, timeByStep } from '../src/domain/flows';
+import { cleanSteps, entryMs, flowOf, mainGroupOf, MAIN_GROUP_ID, nextStep, timeByStep } from '../src/domain/flows';
 import type { Article, Entry } from '../src/domain/types';
 import { mergeShared, splitSnapshot } from '../src/domain/merge';
 import { createMemoryStore } from '../src/repositories/memory';
@@ -109,5 +109,25 @@ describe('Abgleich der Abläufe', () => {
     expect(merged.groups?.some((g) => g.name === 'Glas')).toBe(true);
     // ältere Dateien ohne Gruppen
     expect(mergeShared(splitSnapshot(a.snapshot(), 'a').shared, { version: 1, articles: [], dimensions: [], values: [] }, null).groups?.length).toBe(2);
+  });
+});
+
+describe('Personenzähler im Timer', () => {
+  it('Ändern teilt den laufenden Abschnitt, Pause/Weiter behält die Anzahl', async () => {
+    const s = store();
+    const job = await s.repos.jobs.start({ orderNo: '2612345', workers: 2 });
+    s.tick(10 * 60_000);
+    await s.repos.jobs.setWorkers(job.id, 3);
+    s.tick(10 * 60_000);
+    await s.repos.jobs.pause(job.id);
+    await s.repos.jobs.resume(job.id);
+    s.tick(5 * 60_000);
+    await s.repos.jobs.setWorkers(job.id, 0); // wird auf 1 begrenzt
+    s.tick(5 * 60_000);
+    await s.repos.jobs.finish(job.id);
+    const entries = (await s.repos.entries.listAll()).sort((a, b) => a.startAt - b.startAt);
+    expect(entries.map((e) => e.workers)).toEqual([2, 3, 3, 1]);
+    expect(entries.reduce((sum, e) => sum + entryMs(e, 0, true), 0)).toBe((20 + 30 + 15 + 5) * 60_000);
+    expect((await s.repos.jobs.get(job.id))?.workers).toBe(1);
   });
 });

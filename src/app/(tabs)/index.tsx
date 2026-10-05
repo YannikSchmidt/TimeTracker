@@ -9,6 +9,7 @@ import { SyncBadge, SyncSetupHint } from '../../components/SyncBadge';
 import { UpdateBanner } from '../../components/UpdateBanner';
 import { Empty, SectionTitle } from '../../components/ui';
 import { jobName, reworkOf } from '../../domain/jobs';
+import { sameOrder } from '../../domain/targets';
 import { useArticles } from '../../hooks/useArticles';
 import { useGroups } from '../../hooks/useGroups';
 import { useJobActions } from '../../hooks/useJobActions';
@@ -73,6 +74,9 @@ export default function TimerScreen() {
               article={job.articleId ? articles.byId.get(job.articleId) : undefined}
               reworks={reworks.map((r) => ({ job: r, entries: work.entriesOf.get(r.id) ?? [] }))}
               steps={groups.flowOf(job.articleId ? articles.byId.get(job.articleId) : undefined).steps}
+              partners={work.all.jobs
+                .filter((j) => j.id !== job.id && !work.isOwn(j) && sameOrder(job, j))
+                .map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [], name: work.nameOf(j.createdBy) }))}
               now={now}
             />
           ))

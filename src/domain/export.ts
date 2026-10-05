@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 
+import { entryMs } from './flows';
 import { jobTimes } from './jobs';
 import { toHours } from './time';
 import type { Article, Dimension, DimensionValue, Entry, Job } from './types';
@@ -38,6 +39,7 @@ export function jobsToCsv(
     'Endgerät',
     'Stückzahl',
     'Arbeitszeit (h)',
+    'Personenzeit (h)',
     'Vorgabe (h)',
     'Gesamtzeit (h)',
     'Nacharbeit (h)',
@@ -79,6 +81,7 @@ export function jobsToCsv(
         article?.device ?? '',
         j.quantity == null ? '' : String(j.quantity),
         hours(t.workMs),
+        hours(entries.filter((e) => e.jobId === j.id && !e.deletedAt).reduce((s, e) => s + entryMs(e, now, true), 0)),
         (() => {
           const target = j.kind === 'order' ? targetOf(j) : null;
           return target === null ? '' : hours(target);

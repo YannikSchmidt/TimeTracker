@@ -1,4 +1,4 @@
-import { cleanTargets, compareJob, compareJobs, deltaPct, formatPct, parseMinutes, stepTargetMs } from '../src/domain/targets';
+import { cleanTargets, compareJob, compareJobs, compareOrder, deltaPct, formatPct, orderKey, parseMinutes, sameOrder, stepTargetMs } from '../src/domain/targets';
 import type { Article, Entry, Job } from '../src/domain/types';
 
 const MIN = 60_000;
@@ -63,5 +63,43 @@ describe('Vorgabezeiten', () => {
     expect(formatPct(null)).toBe('–');
     expect(deltaPct(10, null)).toBeNull();
     expect(cleanTargets({ a: { setup: 0, perPiece: 0 }, b: { setup: -1, perPiece: 2 } })).toEqual({ b: { setup: 0, perPiece: 2 } });
+  });
+});
+
+describe('Mehrere Personen', () => {
+  const a = article({ '': { setup: 0, perPiece: 6 } }); // 6 min je Stück, Auftrag ohne Ablauf
+  const e = (jobId: string, minutes: number, workers?: number): Entry => ({ id: `w${n++}`, jobId, startAt: 0, endAt: minutes * MIN, step: null, workers, ...meta });
+
+  it('Personenzähler: Zeit zählt mal Personen', () => {
+    const c = compareJob(job({ quantity: 10 }), [e('j', 20, 2), e('j', 10)], a, [], 0);
+    expect(c.actualMs).toBe(50 * MIN);
+    expect(c.targetMs).toBe(60 * MIN);
+    expect(c.deltaPct).toBe(-17);
+  });
+
+  it('zwei Timer am selben Auftrag zählen zusammen, Vorgabe einmal (größte Stückzahl)', () => {
+    const mine = job({ id: 'j', quantity: 10 });
+    const theirs = job({ id: 'k', quantity: null, createdBy: 'max' });
+    const c = compareOrder([{ job: mine, entries: [e('j', 30)] }, { job: theirs, entries: [e('k', 40)] }], a, [], 0);
+    expect(c).toMatchObject({ actualMs: 70 * MIN, targetMs: 60 * MIN, deltaPct: 17 });
+    expect(sameOrder(mine, theirs)).toBe(true);
+    expect(sameOrder(mine, job({ id: 'x', orderNo: '2699999' }))).toBe(false);
+    expect(sameOrder(mine, job({ id: 'r', kind: 'rework' }))).toBe(false);
+    expect(orderKey(mine)).toBe(orderKey(theirs));
+  });
+
+  it('nur Schritt-Timer: Vorgabe nur für die getrackten Schritte', () => {
+    const b = article({ A: { setup: 10, perPiece: 0 }, B: { setup: 20, perPiece: 0 } });
+    const c = compareOrder(
+      [
+        { job: job({ id: 'j', onlyStep: 'B' }), entries: [{ ...e('j', 25), step: 'B' }] },
+        { job: job({ id: 'k', onlyStep: 'A' }), entries: [{ ...e('k', 5), step: 'A' }] },
+      ],
+      b,
+      ['A', 'B'],
+      0,
+    );
+    expect(c.byStep.map((s) => s.step)).toEqual(['A', 'B']);
+    expect(c).toMatchObject({ actualMs: 30 * MIN, targetMs: 30 * MIN, deltaPct: 0 });
   });
 });

@@ -44,6 +44,8 @@ export interface Job extends JobFields, SyncMeta {
   currentStep: string | null;
   /** Nur dieser eine Arbeitsschritt wird getrackt (z.B. beim Aushelfen); null = ganzer Ablauf */
   onlyStep: string | null;
+  /** Personenzähler: so viele Personen arbeiten gerade mit diesem Timer (fehlt = 1) */
+  workers?: number;
 }
 
 /** Ein Arbeitsabschnitt eines Auftrags (zwischen Start/Fortsetzen und Pause/Beenden). */
@@ -55,6 +57,8 @@ export interface Entry extends SyncMeta {
   endAt: Millis | null;
   /** Arbeitsschritt, in dem dieser Abschnitt gearbeitet wurde (null = ohne Schritt) */
   step: string | null;
+  /** Anzahl Personen in diesem Abschnitt (Personenzähler, fehlt = 1) */
+  workers?: number;
 }
 
 /** Abschnitt mit den Feldern seines Auftrags – flache Sicht für Statistik und Export. */

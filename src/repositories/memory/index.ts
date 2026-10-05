@@ -103,8 +103,8 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
     }
   };
 
-  const openEntry = (jobId: string, t: Millis, step: string | null) => {
-    entries.push({ id: makeId(), jobId, startAt: t, endAt: null, step, createdAt: t, updatedAt: t, deletedAt: null });
+  const openEntry = (jobId: string, t: Millis, step: string | null, workers = 1) => {
+    entries.push({ id: makeId(), jobId, startAt: t, endAt: null, step, workers, createdAt: t, updatedAt: t, deletedAt: null });
   };
 
   const newJob = (input: JobStartInput, t: Millis, status: Job['status']): Job => {
@@ -121,6 +121,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
       createdBy: owner(),
       currentStep: input.onlyStep ?? input.currentStep ?? null,
       onlyStep: input.onlyStep ?? null,
+      workers: clampWorkers(input.workers ?? 1),
       createdAt: t,
       updatedAt: t,
       deletedAt: null,
@@ -208,7 +209,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         const job = newJob(input, t, 'running');
         closeOpen(t);
         jobs.push(job);
-        openEntry(job.id, t, job.currentStep);
+        openEntry(job.id, t, job.currentStep, job.workers);
         changed();
         return copyJob(job);
       },
@@ -223,7 +224,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         if (j.status === 'running') return;
         const t = now();
         closeOpen(t);
-        openEntry(id, t, j.currentStep);
+        openEntry(id, t, j.currentStep, j.workers ?? 1);
         Object.assign(j, { status: 'running', finishedAt: null, updatedAt: t });
         changed();
       },
@@ -234,7 +235,21 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         closeOpen(t, id);
         Object.assign(j, { currentStep: next, updatedAt: t });
         if (wasRunning && next) {
-          openEntry(id, t, next);
+          openEntry(id, t, next, j.workers ?? 1);
+          j.status = 'running';
+        }
+        changed();
+      },
+      async setWorkers(id, n) {
+        const j = findJob(id);
+        const workers = clampWorkers(n);
+        if ((j.workers ?? 1) === workers) return;
+        const t = now();
+        const wasRunning = j.status === 'running';
+        if (wasRunning) closeOpen(t, id);
+        Object.assign(j, { workers, updatedAt: t });
+        if (wasRunning) {
+          openEntry(id, t, j.currentStep, workers);
           j.status = 'running';
         }
         changed();
@@ -504,6 +519,11 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
 
 function copyJob(j: Job): Job {
   return { ...j, valueIds: [...(j.valueIds ?? [])], createdBy: j.createdBy ?? null, currentStep: j.currentStep ?? null, onlyStep: j.onlyStep ?? null };
+}
+
+/** Personenzähler: 1 bis 20 */
+function clampWorkers(n: number): number {
+  return Math.min(20, Math.max(1, Math.round(n) || 1));
 }
 
 function copyGroup(g: ProductGroup): ProductGroup {

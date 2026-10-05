@@ -15,6 +15,8 @@ export interface JobStartInput extends Partial<JobFields> {
   currentStep?: string | null;
   /** nur diesen Schritt tracken */
   onlyStep?: string | null;
+  /** Personenzähler (Standard 1) */
+  workers?: number;
 }
 
 /**
@@ -36,6 +38,11 @@ export interface JobRepository {
    * läuft der Auftrag, beginnt sofort ein neuer Abschnitt mit dem nächsten Schritt.
    */
   nextStep(id: string, next: string | null): Promise<void>;
+  /**
+   * Personenzähler ändern. Läuft der Auftrag, endet der aktuelle Abschnitt jetzt und ein neuer mit der
+   * neuen Anzahl beginnt – so zählt jede Zeitspanne mit der richtigen Personenzahl.
+   */
+  setWorkers(id: string, workers: number): Promise<void>;
   /** Abgeschlossenen Auftrag wieder öffnen (pausiert). */
   reopen(id: string): Promise<void>;
   update(id: string, fields: Partial<JobFields>): Promise<void>;
