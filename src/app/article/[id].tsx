@@ -4,10 +4,13 @@ import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { DeleteAction } from '../../components/DeleteAction';
 import { GroupPicker } from '../../components/GroupPicker';
+import { TargetsEditor } from '../../components/TargetsEditor';
 import { ScanButton } from '../../components/ScanButton';
 import { Button, Card, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
+import type { StepTarget } from '../../domain/targets';
 import { articleLabel } from '../../hooks/useArticles';
+import { useGroups } from '../../hooks/useGroups';
 import { radius, spacing, usePalette } from '../../theme';
 
 /** Artikel bearbeiten (`/article/<id>`) oder anlegen (`/article/new`). */
@@ -22,6 +25,9 @@ export default function ArticleScreen() {
   const [name, setName] = useState('');
   const [device, setDevice] = useState('');
   const [groupId, setGroupId] = useState<string | null>(null);
+  const [targets, setTargets] = useState<Record<string, StepTarget>>({});
+  const groups = useGroups();
+  const { data: settings } = useQuery((r) => r.settings.get());
   const [loaded, setLoaded] = useState(isNew);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,12 +36,13 @@ export default function ArticleScreen() {
     setName(article.name);
     setDevice(article.device);
     setGroupId(article.groupId);
+    setTargets(article.targets ?? {});
     setLoaded(true);
   }
 
   const save = async () => {
     try {
-      const input = { number, name, device, groupId };
+      const input = { number, name, device, groupId, targets };
       await mutate(async (r) => {
         if (isNew) await r.articles.create(input);
         else await r.articles.update(id, input);
@@ -104,6 +111,15 @@ export default function ArticleScreen() {
         <View>
           <SectionTitle>Gruppe</SectionTitle>
           <GroupPicker number={number} groupId={groupId} onChange={setGroupId} />
+        </View>
+        <View>
+          <SectionTitle>Vorgabezeiten</SectionTitle>
+          <TargetsEditor
+            steps={groups.flowOf({ id: '', number, name, device, groupId, targets, createdAt: 0, updatedAt: 0, deletedAt: null }).steps}
+            targets={targets}
+            onChange={setTargets}
+            exampleQuantity={settings?.defaultQuantity ?? 24}
+          />
         </View>
       </Card>
 

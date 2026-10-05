@@ -23,9 +23,12 @@ import {
   type BucketUnit,
   type PeriodKind,
 } from '../../domain/stats';
+import { compareJob, compareJobs, deltaPct, formatPct, type ComparisonRow } from '../../domain/targets';
 import { formatDuration } from '../../domain/time';
+import { DEFAULT_SETTINGS } from '../../domain/types';
 import { articleLabel, useArticles } from '../../hooks/useArticles';
 import { useDimensions } from '../../hooks/useDimensions';
+import { useGroups } from '../../hooks/useGroups';
 import { useNow } from '../../hooks/useNow';
 import { useWork, type OwnerFilter } from '../../hooks/useWork';
 import { spacing, usePalette, VALUE_COLORS } from '../../theme';
@@ -59,9 +62,10 @@ export default function StatsScreen() {
 
   const work = useWork();
   const [owner, setOwner] = useState<OwnerFilter>('me');
+  const groups = useGroups();
+  const [vsMain, setVsMain] = useState<'device' | 'part' | 'none'>('device');
   const view = work.view(owner);
   const entries = view.segments;
-  const settings = work.settings;
 
   const range = useMemo(() => periodRange(kind, anchor), [kind, anchor]);
   const isCurrent = range.start <= now && now < range.end;
@@ -72,12 +76,27 @@ export default function StatsScreen() {
     const trend = TREND[kind];
     const trendRange =
       trend.count > 0 ? { start: shiftAnchor(kind, range.start, -(trend.count - 1)), end: range.end } : range;
-    const perDayTarget =
-      settings.workDays.length > 0 ? (settings.weeklyTargetHours * 3_600_000) / settings.workDays.length : 0;
+    // Vorgabe gegen Ist: abgeschlossene Aufträge mit Abschluss im Zeitraum
+    const finished = view.jobs.filter((j) => j.kind === 'order' && j.status === 'done' && j.finishedAt !== null && j.finishedAt >= range.start && j.finishedAt < range.end);
+    const compared = finished.map((job) => {
+      const article = job.articleId ? articles.byId.get(job.articleId) : undefined;
+      const flow = groups.flowOf(article);
+      return { job, flow, comparison: compareJob(job, view.entriesOf.get(job.id) ?? [], article, flow.steps, now) };
+    });
+    const flowOfJob = new Map(compared.map((c) => [c.job.id, c.flow]));
+    const mainKey = (id: string) => flowOfJob.get(id)?.main ?? 'none';
     return {
-      kpis: computeKpis(entries, range, settings, now),
+      kpis: computeKpis(entries, range, DEFAULT_SETTINGS, now),
       buckets: bucketTotals(entries, range, unit, now),
-      barTarget: unit === 'day' ? perDayTarget : undefined,
+      vsMains: (['device', 'part', 'none'] as const).map((main) => {
+        const items = compared.filter((c) => mainKey(c.job.id) === main);
+        return {
+          main,
+          total: compareJobs(items, () => 'all')[0] ?? null,
+          subgroups: compareJobs(items, (j) => flowOfJob.get(j.id)?.subgroup?.id ?? '-'),
+          articles: compareJobs(items, (j) => j.articleId ?? '-'),
+        };
+      }),
       trend: bucketTotals(entries, trendRange, trend.unit, now),
       streak: currentStreak(entries, now),
       hours: hourProfile(entries, range, now),
@@ -92,10 +111,13 @@ export default function StatsScreen() {
       production: articleProduction(entries, range, now),
       reworkReasons: reworkByReason(entries, view.jobs, range, now),
     };
-  }, [entries, settings, range, kind, now, dimension, dims.values, group, articles.byId, view.jobs]);
+  }, [entries, range, kind, now, dimension, dims.values, group, articles.byId, view.jobs, view.entriesOf, groups]);
 
   const { kpis } = stats;
-  const balancePositive = kpis.balanceMs >= 0;
+  const allVs = stats.vsMains.map((m) => m.total).filter((t): t is NonNullable<typeof t> => !!t);
+  const vsTarget = allVs.reduce((s, t) => s + t.targetMs, 0);
+  const vsActual = allVs.reduce((s, t) => s + t.comparableMs, 0);
+  const vsPct = deltaPct(vsActual, vsTarget || null);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -118,28 +140,59 @@ export default function StatsScreen() {
       {/* Übersicht: das Wichtigste auf einen Blick */}
       <View style={styles.kpiGrid}>
         <Kpi
-          label="Arbeitszeit"
+          label="Zeit an Aufträgen"
           value={formatDuration(kpis.totalMs)}
           hint={kpis.reworkMs > 0 ? `davon Nacharbeit ${formatDuration(kpis.reworkMs)}` : undefined}
         />
-        {owner === 'me' ? (
-          <Kpi
-            label={balancePositive ? 'Überstunden' : 'Fehlstunden'}
-            value={`${balancePositive ? '+' : ''}${formatDuration(kpis.balanceMs)}`}
-            color={balancePositive ? p.success : p.danger}
-            hint={`Soll ${formatDuration(kpis.targetMs)}`}
-          />
-        ) : (
-          // Sollzeiten anderer Personen sind nicht bekannt
-          <Kpi label="Nacharbeit" value={formatDuration(kpis.reworkMs)} color={kpis.reworkMs > 0 ? p.warning : undefined} />
-        )}
-        <Kpi label="Ø pro aktivem Tag" value={formatDuration(kpis.avgPerActiveDayMs)} hint={`${days(kpis.activeDays)} aktiv`} />
-        <Kpi label="Aufträge" value={String(kpis.jobCount)} hint={`Serie: ${days(stats.streak)}`} />
+        <Kpi
+          label="Ist gegen Vorgabe"
+          value={formatPct(vsPct)}
+          color={vsPct === null ? undefined : vsPct > 0 ? p.danger : p.success}
+          hint={vsTarget ? `Vorgabe ${formatDuration(vsTarget)} · Ist ${formatDuration(vsActual)}` : 'keine Vorgaben im Zeitraum'}
+        />
+        <Kpi label="Nacharbeit" value={formatDuration(kpis.reworkMs)} color={kpis.reworkMs > 0 ? p.warning : undefined} />
+        <Kpi label="Aufträge" value={String(kpis.jobCount)} hint={`${allVs.reduce((s, t) => s + t.jobs, 0)} abgeschlossen`} />
       </View>
 
       <Card>
-        <BarChart data={stats.buckets} targetMs={stats.barTarget} />
+        <BarChart data={stats.buckets} />
       </Card>
+
+      <Expandable title="Vorgabe gegen Ist" icon="speedometer-outline" initiallyOpen>
+        <Segmented
+          options={[
+            { value: 'device', label: 'Gesamtgeräte' },
+            { value: 'part', label: 'Fronten' },
+            { value: 'none', label: 'Sonstige' },
+          ]}
+          value={vsMain}
+          onChange={setVsMain}
+        />
+        {(() => {
+          const m = stats.vsMains.find((x) => x.main === vsMain)!;
+          if (!m.total) return <Empty text="Keine abgeschlossenen Aufträge in diesem Zeitraum." />;
+          return (
+            <View style={{ gap: spacing.md, marginTop: spacing.md }}>
+              {vsMain !== 'none' && (
+                <VsTable
+                  title="Untergruppen"
+                  rows={m.subgroups}
+                  nameOf={(key) => (key === '-' ? 'ohne Untergruppe' : (groups.byId.get(key)?.name ?? 'gelöscht'))}
+                />
+              )}
+              <VsTable
+                title="Artikel"
+                rows={m.articles}
+                nameOf={(key) => (key === '-' ? 'ohne Artikel' : articles.byId.get(key) ? articleLabel(articles.byId.get(key)!) : 'gelöscht')}
+              />
+              <Text style={{ color: p.muted, fontSize: 12 }}>
+                Abgeschlossene Aufträge im Zeitraum. Ist = Zeit, in der der Timer lief. Abweichung nur über Aufträge mit Vorgabe;
+                Min/Stk = Ist geteilt durch Stückzahl.
+              </Text>
+            </View>
+          );
+        })()}
+      </Expandable>
 
       {/* Details: aufklappbar, damit die Übersicht schlank bleibt */}
       <Expandable title="Verteilung" icon="pie-chart-outline" initiallyOpen>
@@ -238,10 +291,9 @@ export default function StatsScreen() {
       <Expandable title="Weitere Kennzahlen" icon="speedometer-outline">
         <Row label="Längste Session" value={formatDuration(kpis.longestMs)} />
         <Row label="Aktive Tage" value={String(kpis.activeDays)} />
-        <Row label="Soll im Zeitraum (bis heute)" value={formatDuration(kpis.targetMs)} />
-        <Row label="Ist im Zeitraum" value={formatDuration(kpis.totalMs)} />
+        <Row label="Zeit an Aufträgen" value={formatDuration(kpis.totalMs)} />
+        <Row label="Ø pro aktivem Tag" value={formatDuration(kpis.avgPerActiveDayMs)} />
         <Row label="Aktuelle Serie" value={days(stats.streak)} />
-        <Row label="Wochen-Soll" value={`${settings.weeklyTargetHours} h`} />
       </Expandable>
 
       <Expandable title="Wochentage" icon="calendar-outline">
@@ -271,6 +323,44 @@ function keyShares(totals: { key: string | null; ms: number }[], nameOf: (key: s
   if (restMs > 0) shown.push({ key: 'rest', name: `Weitere (${named.length - MAX_SHARES})`, color: '#6B7280', ms: restMs });
   if (none) shown.push({ key: 'none', name: noneName, color: NONE_COLOR, ms: none.ms });
   return shown;
+}
+
+/** Tabelle Ist gegen Vorgabe (Untergruppen bzw. Artikel): Name in eigener Zeile, darunter die Zahlen */
+function VsTable({ title, rows, nameOf }: { title: string; rows: ComparisonRow[]; nameOf: (key: string) => string }) {
+  const p = usePalette();
+  return (
+    <View>
+      <Text style={[styles.th, { color: p.text, fontSize: 14 }]}>{title}</Text>
+      <View style={[styles.tableRow, { borderBottomColor: p.border }]}>
+        <Text style={[styles.th, { color: p.muted, flex: 1 }]} />
+        {['Ist', 'Vorgabe', 'Abw.', 'Min/Stk'].map((h) => (
+          <Text key={h} style={[styles.vsNum, styles.th, { color: p.muted }]}>
+            {h}
+          </Text>
+        ))}
+      </View>
+      {rows.map((r) => (
+        <View key={r.key} style={[styles.vsRow, { borderBottomColor: p.border }]}>
+          <Text style={{ color: p.text, fontWeight: '600' }} numberOfLines={1}>
+            {nameOf(r.key)}
+          </Text>
+          <View style={styles.vsNums}>
+            <Text style={{ color: p.muted, fontSize: 12, flex: 1 }} numberOfLines={1}>
+              {r.jobs} Auftr.{r.pieces ? ` · ${r.pieces} Stk` : ''}
+            </Text>
+            <Text style={[styles.vsNum, { color: p.text }]}>{formatDuration(r.actualMs)}</Text>
+            <Text style={[styles.vsNum, { color: p.muted }]}>{r.targetMs ? formatDuration(r.targetMs) : '–'}</Text>
+            <Text style={[styles.vsNum, { color: r.deltaPct === null ? p.muted : r.deltaPct > 0 ? p.danger : p.success, fontWeight: '700' }]}>
+              {formatPct(r.deltaPct)}
+            </Text>
+            <Text style={[styles.vsNum, { color: p.text }]}>
+              {r.pieces ? (r.actualMs / r.pieces / 60_000).toLocaleString('de-DE', { maximumFractionDigits: 1 }) : '–'}
+            </Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
 }
 
 function Kpi({ label, value, hint, color }: { label: string; value: string; hint?: string; color?: string }) {
@@ -313,6 +403,9 @@ const styles = StyleSheet.create({
   th: { fontSize: 12, fontWeight: '600' },
   colName: { flex: 1, minWidth: 0 },
   colNum: { width: 62, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  vsRow: { paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, gap: 2 },
+  vsNums: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  vsNum: { width: 58, textAlign: 'right', fontVariant: ['tabular-nums'], fontSize: 13 },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',

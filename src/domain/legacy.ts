@@ -76,11 +76,11 @@ export function legacyEntryToJob(e: LegacyEntry): { job: Job; entry: Entry } {
  */
 export function normalizeArticle(a: Article): Article {
   const legacy = (a.description ?? '').trim();
-  if (!legacy && typeof a.device === 'string' && a.description === undefined && a.groupId !== undefined) return a;
+  if (!legacy && typeof a.device === 'string' && a.description === undefined && a.groupId !== undefined && a.targets) return a;
   const name = a.name.trim();
   const merged = !legacy || legacy === name ? name : name ? `${name} – ${legacy}` : legacy;
   const { description: _old, ...rest } = a;
-  return { ...rest, name: merged, device: typeof a.device === 'string' ? a.device : '', groupId: a.groupId ?? null };
+  return { ...rest, name: merged, device: typeof a.device === 'string' ? a.device : '', groupId: a.groupId ?? null, targets: a.targets ?? {} };
 }
 
 /** Aufträge älterer Versionen: fehlende Felder ergänzen. */

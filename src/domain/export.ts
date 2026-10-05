@@ -21,6 +21,8 @@ export function jobsToCsv(
   values: DimensionValue[],
   articles: Article[],
   now: number,
+  /** Vorgabezeit eines Auftrags (ms) – leer, wenn keine hinterlegt */
+  targetOf: (job: Job) => number | null = () => null,
 ): string {
   const valuesById = new Map(values.map((v) => [v.id, v]));
   const articlesById = new Map(articles.map((a) => [a.id, a]));
@@ -36,6 +38,7 @@ export function jobsToCsv(
     'Endgerät',
     'Stückzahl',
     'Arbeitszeit (h)',
+    'Vorgabe (h)',
     'Gesamtzeit (h)',
     'Nacharbeit (h)',
     'Nacharbeitsgrund',
@@ -76,6 +79,10 @@ export function jobsToCsv(
         article?.device ?? '',
         j.quantity == null ? '' : String(j.quantity),
         hours(t.workMs),
+        (() => {
+          const target = j.kind === 'order' ? targetOf(j) : null;
+          return target === null ? '' : hours(target);
+        })(),
         hours(t.totalMs),
         rework > 0 ? hours(rework) : '',
         j.reworkReason ?? '',

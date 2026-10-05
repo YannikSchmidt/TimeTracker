@@ -5,7 +5,7 @@ import { mergeShared, splitSnapshot } from '../src/domain/merge';
 import { createMemoryStore } from '../src/repositories/memory';
 
 const meta = { createdAt: 0, updatedAt: 0, deletedAt: null };
-const art = (number: string, groupId: string | null = null): Article => ({ id: number || 'x', number, name: '', device: '', groupId, ...meta });
+const art = (number: string, groupId: string | null = null): Article => ({ id: number || 'x', number, name: '', device: '', groupId, targets: {}, ...meta });
 
 function store() {
   let id = 0;

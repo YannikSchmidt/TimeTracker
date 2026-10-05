@@ -118,11 +118,11 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
         for (const a of data.articles) {
           if (articleIdMap.get(a.id) !== a.id) continue;
           await db.runAsync(
-            `INSERT INTO articles (id, number, name, device, group_id, created_at, updated_at, deleted_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO articles (id, number, name, device, group_id, targets, created_at, updated_at, deleted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET number = excluded.number, name = excluded.name, device = excluded.device,
-               group_id = excluded.group_id, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
-            a.id, a.number, a.name, a.device, a.groupId, a.createdAt, a.updatedAt, a.deletedAt,
+               group_id = excluded.group_id, targets = excluded.targets, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
+            a.id, a.number, a.name, a.device, a.groupId, JSON.stringify(a.targets ?? {}), a.createdAt, a.updatedAt, a.deletedAt,
           );
         }
         for (const j of data.jobs) {

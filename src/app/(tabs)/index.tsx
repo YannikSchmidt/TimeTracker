@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { addDays, startOfDay } from 'date-fns';
+import { startOfDay } from 'date-fns';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -9,8 +9,6 @@ import { SyncBadge, SyncSetupHint } from '../../components/SyncBadge';
 import { UpdateBanner } from '../../components/UpdateBanner';
 import { Empty, SectionTitle } from '../../components/ui';
 import { jobName, reworkOf } from '../../domain/jobs';
-import { totalMs } from '../../domain/stats';
-import { formatDuration } from '../../domain/time';
 import { useArticles } from '../../hooks/useArticles';
 import { useGroups } from '../../hooks/useGroups';
 import { useJobActions } from '../../hooks/useJobActions';
@@ -28,7 +26,6 @@ export default function TimerScreen() {
   const now = useNow(1000);
 
   const dayStart = startOfDay(now).getTime();
-  const dayEnd = addDays(dayStart, 1).getTime();
 
   const open = sortOpenJobs(work.jobs.filter((j) => j.status !== 'done'));
   // Nacharbeit zu einem offenen Auftrag steht in dessen Kachel; sonst als eigene Kachel (gleiche Farbe)
@@ -41,7 +38,6 @@ export default function TimerScreen() {
   const doneToday = work.jobs
     .filter((j) => j.status === 'done' && j.kind === 'order' && (j.finishedAt ?? 0) >= dayStart)
     .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0));
-  const todayMs = totalMs(work.segments, { start: dayStart, end: dayEnd }, now);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -61,9 +57,6 @@ export default function TimerScreen() {
       <UpdateBanner />
       <SyncSetupHint />
       <SyncBadge />
-      <Text style={{ color: p.muted, textAlign: 'center' }}>
-        Heute gearbeitet: <Text style={{ color: p.text, fontWeight: '700' }}>{formatDuration(todayMs)}</Text>
-      </Text>
 
       <View style={{ gap: spacing.md }}>
         <SectionTitle>Offene Aufträge {cards.length > 0 ? `(${cards.length})` : ''}</SectionTitle>

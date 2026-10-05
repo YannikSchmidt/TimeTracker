@@ -13,6 +13,7 @@ import {
   type Settings,
 } from '../../domain/types';
 import { cleanSteps, withMainGroups } from '../../domain/flows';
+import { cleanTargets } from '../../domain/targets';
 import { jobFieldsWithDefaults, sortOpenJobs, type JobStartInput, type Repositories } from '../types';
 import { duplicateArticleError, normalizeArticleNumber, notFound, validateQuantity, validateTimes } from '../validation';
 
@@ -381,7 +382,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         if (findArticle(number)) throw duplicateArticleError(number);
         const t = now();
         const article: Article = {
-          id: makeId(), number, name: input.name.trim(), device: input.device.trim(), groupId: input.groupId ?? null,
+          id: makeId(), number, name: input.name.trim(), device: input.device.trim(), groupId: input.groupId ?? null, targets: cleanTargets(input.targets ?? {}),
           createdAt: t, updatedAt: t, deletedAt: null, updatedBy: owner(),
         };
         articles.push(article);
@@ -399,6 +400,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
           name: (input.name ?? a.name).trim(),
           device: (input.device ?? a.device).trim(),
           groupId: input.groupId === undefined ? a.groupId : input.groupId,
+          targets: input.targets === undefined ? a.targets : cleanTargets(input.targets),
           updatedAt: now(),
           updatedBy: owner(),
         });

@@ -72,6 +72,8 @@ export interface ArticleInput {
   device: string;
   /** Untergruppe bzw. Hauptgruppe; fehlt = keine (aus der Nummer abgeleitet) */
   groupId?: string | null;
+  /** Vorgabezeiten (Minuten) je Arbeitsschritt */
+  targets?: Article['targets'];
 }
 
 export interface GroupRepository {
