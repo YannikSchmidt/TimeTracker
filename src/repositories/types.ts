@@ -1,5 +1,5 @@
 import type { BackupData, LegacyBackupData } from '../domain/legacy';
-import type { Article, Dimension, DimensionValue, Entry, Job, JobFields, JobKind, Millis, Settings, DeletionKind, DeletionRequest, DeletionStatus } from '../domain/types';
+import type { Article, Dimension, DimensionValue, Entry, Job, JobFields, JobKind, Millis, Settings, DeletionKind, DeletionRequest, DeletionStatus, MainGroup, ProductGroup } from '../domain/types';
 
 export type { BackupData, LegacyBackupData };
 
@@ -11,6 +11,10 @@ export type { BackupData, LegacyBackupData };
 export interface JobStartInput extends Partial<JobFields> {
   kind?: JobKind;
   parentJobId?: string | null;
+  /** erster Arbeitsschritt (aus dem Ablauf) bzw. der eine Schritt bei onlyStep */
+  currentStep?: string | null;
+  /** nur diesen Schritt tracken */
+  onlyStep?: string | null;
 }
 
 /**
@@ -27,6 +31,11 @@ export interface JobRepository {
   resume(id: string): Promise<void>;
   /** Beendet den Auftrag (laufender Abschnitt wird geschlossen). */
   finish(id: string, extra?: { reworkReason?: string | null }): Promise<void>;
+  /**
+   * Arbeitsschritt abschließen und zum nächsten wechseln: Der laufende Abschnitt endet jetzt,
+   * läuft der Auftrag, beginnt sofort ein neuer Abschnitt mit dem nächsten Schritt.
+   */
+  nextStep(id: string, next: string | null): Promise<void>;
   /** Abgeschlossenen Auftrag wieder öffnen (pausiert). */
   reopen(id: string): Promise<void>;
   update(id: string, fields: Partial<JobFields>): Promise<void>;
@@ -61,6 +70,15 @@ export interface ArticleInput {
   name: string;
   /** Endgerät (Notiz) */
   device: string;
+  /** Untergruppe bzw. Hauptgruppe; fehlt = keine (aus der Nummer abgeleitet) */
+  groupId?: string | null;
+}
+
+export interface GroupRepository {
+  /** Hauptgruppen + Untergruppen (nicht gelöschte) */
+  list(): Promise<ProductGroup[]>;
+  create(input: { main: MainGroup; name: string; parentId: string; steps?: string[] }): Promise<ProductGroup>;
+  update(id: string, input: { name?: string; steps?: string[] }): Promise<void>;
 }
 
 export interface ArticleRepository {
@@ -100,6 +118,7 @@ export interface DeletionRequestRepository {
 export interface Repositories {
   jobs: JobRepository;
   requests: DeletionRequestRepository;
+  groups: GroupRepository;
   entries: EntryRepository;
   dimensions: DimensionRepository;
   articles: ArticleRepository;

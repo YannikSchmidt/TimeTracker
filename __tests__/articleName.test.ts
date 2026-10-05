@@ -5,12 +5,12 @@ import type { Article } from '../src/domain/types';
 import { articleDetails, findArticleByName, matchArticles } from '../src/hooks/useArticles';
 
 const meta = { createdAt: 0, updatedAt: 7, deletedAt: null };
-const art = (number: string, name: string, device = '', id = number): Article => ({ id, number, name, device, ...meta });
+const art = (number: string, name: string, device = '', id = number): Article => ({ id, number, name, device, groupId: null, ...meta });
 
 describe('normalizeArticle', () => {
   it('übernimmt die alte Bezeichnung in die Benennung', () => {
     const old = { id: 'a', number: '1', name: '', description: 'Halter links', ...meta } as unknown as Article;
-    expect(normalizeArticle(old)).toEqual({ id: 'a', number: '1', name: 'Halter links', device: '', ...meta });
+    expect(normalizeArticle(old)).toEqual({ id: 'a', number: '1', name: 'Halter links', device: '', groupId: null, ...meta });
   });
 
   it('verbindet Name und Bezeichnung, gleiche Texte nur einmal', () => {

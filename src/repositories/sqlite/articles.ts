@@ -10,6 +10,7 @@ interface ArticleRow {
   number: string;
   name: string;
   device: string;
+  group_id: string | null;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
@@ -20,6 +21,7 @@ const toArticle = (r: ArticleRow): Article => ({
   number: r.number,
   name: r.name,
   device: r.device,
+  groupId: r.group_id ?? null,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
   deletedAt: r.deleted_at,
@@ -58,16 +60,18 @@ export class SqliteArticleRepository implements ArticleRepository {
       number,
       name: input.name.trim(),
       device: input.device.trim(),
+      groupId: input.groupId ?? null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
     };
     await this.db.runAsync(
-      'INSERT INTO articles (id, number, name, device, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO articles (id, number, name, device, group_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       article.id,
       article.number,
       article.name,
       article.device,
+      article.groupId,
       now,
       now,
     );
@@ -81,10 +85,11 @@ export class SqliteArticleRepository implements ArticleRepository {
     const other = number ? await this.findByNumber(number) : null;
     if (other && other.id !== id) throw duplicateArticleError(number);
     await this.db.runAsync(
-      'UPDATE articles SET number = ?, name = ?, device = ?, updated_at = ? WHERE id = ?',
+      'UPDATE articles SET number = ?, name = ?, device = ?, group_id = ?, updated_at = ? WHERE id = ?',
       number,
       (input.name ?? current.name).trim(),
       (input.device ?? current.device).trim(),
+      input.groupId === undefined ? current.groupId : input.groupId,
       Date.now(),
       id,
     );

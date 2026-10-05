@@ -9,6 +9,8 @@ export function useJobActions() {
   return {
     pause: (job: Job) => mutate((r) => r.jobs.pause(job.id)),
     resume: (job: Job) => mutate((r) => r.jobs.resume(job.id)),
+    /** Arbeitsschritt abschließen, mit dem nächsten weitermachen (Zeit läuft weiter) */
+    nextStep: (job: Job, next: string | null) => mutate((r) => r.jobs.nextStep(job.id, next)),
     /** Auftrag: sofort beenden und Abschluss zeigen. Nacharbeit: erst Grund abfragen. */
     finish: async (job: Job) => {
       if (job.kind === 'rework') {

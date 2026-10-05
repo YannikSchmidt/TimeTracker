@@ -6,6 +6,7 @@ import type { BackupData, Repositories, SettingsRepository } from '../types';
 import { SqliteArticleRepository } from './articles';
 import { SqliteDimensionRepository } from './dimensions';
 import { SqliteEntryRepository } from './entries';
+import { SqliteGroupRepository } from './groups';
 import { SqliteJobRepository } from './jobs';
 
 class SqliteSettingsRepository implements SettingsRepository {
@@ -34,6 +35,7 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
   const dimensions = new SqliteDimensionRepository(db);
   const articles = new SqliteArticleRepository(db);
   const settings = new SqliteSettingsRepository(db);
+  const groups = new SqliteGroupRepository(db);
 
   return {
     jobs,
@@ -47,6 +49,7 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
       },
       async setStatus() {},
     },
+    groups,
     entries,
     dimensions,
     articles,
@@ -61,6 +64,7 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
         dimensions: await dimensions.listDimensions(),
         values: await dimensions.listValues(),
         articles: await articles.list(),
+        groups: await groups.list(),
         settings: await settings.get(),
       };
     },
@@ -114,11 +118,11 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
         for (const a of data.articles) {
           if (articleIdMap.get(a.id) !== a.id) continue;
           await db.runAsync(
-            `INSERT INTO articles (id, number, name, device, created_at, updated_at, deleted_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO articles (id, number, name, device, group_id, created_at, updated_at, deleted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET number = excluded.number, name = excluded.name, device = excluded.device,
-               updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
-            a.id, a.number, a.name, a.device, a.createdAt, a.updatedAt, a.deletedAt,
+               group_id = excluded.group_id, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
+            a.id, a.number, a.name, a.device, a.groupId, a.createdAt, a.updatedAt, a.deletedAt,
           );
         }
         for (const j of data.jobs) {
@@ -126,29 +130,40 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
           const status = localRunning && j.status === 'running' ? 'paused' : j.status;
           await db.runAsync(
             `INSERT INTO jobs (id, kind, status, article_id, order_no, quantity, note, parent_job_id, rework_reason,
-                               started_at, finished_at, created_at, updated_at, deleted_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               started_at, finished_at, current_step, only_step, created_at, updated_at, deleted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, status = excluded.status, article_id = excluded.article_id,
                order_no = excluded.order_no, quantity = excluded.quantity, note = excluded.note,
                parent_job_id = excluded.parent_job_id, rework_reason = excluded.rework_reason,
                started_at = excluded.started_at, finished_at = excluded.finished_at,
+               current_step = excluded.current_step, only_step = excluded.only_step,
                updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
             j.id, j.kind, status, articleId, j.orderNo, j.quantity, j.note ?? '', j.parentJobId, j.reworkReason,
-            j.startedAt, j.finishedAt, j.createdAt, j.updatedAt, j.deletedAt,
+            j.startedAt, j.finishedAt, j.currentStep, j.onlyStep, j.createdAt, j.updatedAt, j.deletedAt,
           );
           await db.runAsync('DELETE FROM job_values WHERE job_id = ?', j.id);
           for (const valueId of j.valueIds ?? []) {
             await db.runAsync('INSERT OR IGNORE INTO job_values (job_id, value_id) VALUES (?, ?)', j.id, valueId);
           }
         }
+        for (const g of data.groups ?? []) {
+          await db.runAsync(
+            `INSERT INTO product_groups (id, main, name, parent_id, steps, created_at, updated_at, deleted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET name = excluded.name, steps = excluded.steps,
+               updated_at = excluded.updated_at, deleted_at = excluded.deleted_at
+             WHERE excluded.updated_at >= product_groups.updated_at`,
+            g.id, g.main, g.name, g.parentId, JSON.stringify(g.steps), g.createdAt, g.updatedAt, g.deletedAt,
+          );
+        }
         for (const e of data.entries) {
           const endAt = localRunning && e.endAt === null ? Math.max(now, e.startAt + 1) : e.endAt;
           await db.runAsync(
-            `INSERT INTO entries (id, job_id, start_at, end_at, created_at, updated_at, deleted_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO entries (id, job_id, start_at, end_at, step, created_at, updated_at, deleted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET job_id = excluded.job_id, start_at = excluded.start_at, end_at = excluded.end_at,
-               updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
-            e.id, e.jobId, e.startAt, endAt, e.createdAt, e.updatedAt, e.deletedAt,
+               step = excluded.step, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
+            e.id, e.jobId, e.startAt, endAt, e.step, e.createdAt, e.updatedAt, e.deletedAt,
           );
         }
       });

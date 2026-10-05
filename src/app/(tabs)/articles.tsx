@@ -4,12 +4,14 @@ import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ScanButton } from '../../components/ScanButton';
-import { Empty } from '../../components/ui';
+import { Empty, Segmented } from '../../components/ui';
 import { useData } from '../../data/DataProvider';
 import { jobTimes } from '../../domain/jobs';
 import { suggestQuantity } from '../../domain/quantity';
 import { formatDuration } from '../../domain/time';
+import { mainGroupOf } from '../../domain/flows';
 import { matchArticles, useArticles } from '../../hooks/useArticles';
+import { useGroups } from '../../hooks/useGroups';
 import { useNow } from '../../hooks/useNow';
 import { useWork } from '../../hooks/useWork';
 import { radius, spacing, usePalette } from '../../theme';
@@ -20,7 +22,10 @@ export default function ArticlesScreen() {
   const articles = useArticles();
   const now = useNow(60_000);
   const work = useWork();
+  const groups = useGroups();
   const [query, setQuery] = useState('');
+  /** Gesamtgeräte und Fronten strikt getrennt; „Sonstige“ = ohne erkennbare Gruppe */
+  const [tab, setTab] = useState<'device' | 'part' | 'none'>('device');
   const [message, setMessage] = useState<string | null>(null);
 
   // Nutzung je Artikel: Anzahl Aufträge und Arbeitszeit (ohne Nacharbeit)
@@ -36,7 +41,11 @@ export default function ArticlesScreen() {
     return map;
   }, [work, now]);
 
-  const list = matchArticles(articles.articles, query);
+  const mainOf = (a: (typeof articles.articles)[number]) => mainGroupOf(a, groups.byId, work.settings.codePatterns) ?? 'none';
+  const counts = { device: 0, part: 0, none: 0 };
+  for (const a of articles.articles) counts[mainOf(a)]++;
+  // Mit Suchbegriff wird in allen Gruppen gesucht, sonst zeigt die Liste nur die gewählte Gruppe
+  const list = query.trim() ? matchArticles(articles.articles, query) : articles.articles.filter((a) => mainOf(a) === tab);
 
   // Scannen: vorhandenen Artikel öffnen, unbekannten sofort anlegen
   const onScan = async (code: string) => {
@@ -72,6 +81,21 @@ export default function ArticlesScreen() {
         <ScanButton label="Artikel scannen" onScan={(code) => void onScan(code)} />
       </View>
       {message && <Text style={[styles.message, { color: p.danger }]}>{message}</Text>}
+      <View style={styles.tabs}>
+        <Segmented
+          options={[
+            { value: 'device', label: `Gesamtgeräte (${counts.device})` },
+            { value: 'part', label: `Fronten (${counts.part})` },
+            { value: 'none', label: `Sonstige (${counts.none})` },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+        <Pressable accessibilityRole="button" onPress={() => router.push('/flows')} style={styles.flowsLink}>
+          <Ionicons name="git-network-outline" size={16} color={p.primary} />
+          <Text style={{ color: p.primary, fontWeight: '600' }}>Abläufe & Untergruppen bearbeiten</Text>
+        </Pressable>
+      </View>
 
       <FlatList
         data={list}
@@ -102,7 +126,13 @@ export default function ArticlesScreen() {
                 <Text style={{ color: p.text, fontWeight: '700', fontSize: 16 }} numberOfLines={1}>
                   {item.name || item.number}
                 </Text>
-                {item.name ? <Text style={{ color: p.muted }}>{item.number}</Text> : null}
+                {item.name || item.groupId ? (
+                  <Text style={{ color: p.muted }}>
+                    {[item.name ? item.number : '', groups.byId.get(item.groupId ?? '')?.parentId ? groups.byId.get(item.groupId!)!.name : '']
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                ) : null}
                 {item.device ? (
                   <Text style={{ color: p.muted }} numberOfLines={2}>
                     <Ionicons name="hardware-chip-outline" size={13} color={p.muted} /> {item.device}
@@ -146,6 +176,8 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, minWidth: 0, fontSize: 16, height: '100%' },
   message: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+  tabs: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
+  flowsLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 2 },
   list: { padding: spacing.lg, paddingBottom: 100 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.md },
   fab: {

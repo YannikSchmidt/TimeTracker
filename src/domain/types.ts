@@ -40,6 +40,10 @@ export interface Job extends JobFields, SyncMeta {
   finishedAt: Millis | null;
   /** GitHub-Login der Person, der der Auftrag gehört (null = lokal, ohne Team-Sync) */
   createdBy: string | null;
+  /** Arbeitsschritt, der gerade dran ist (aus dem Ablauf des Artikels); null = kein Ablauf bzw. alle erledigt */
+  currentStep: string | null;
+  /** Nur dieser eine Arbeitsschritt wird getrackt (z.B. beim Aushelfen); null = ganzer Ablauf */
+  onlyStep: string | null;
 }
 
 /** Ein Arbeitsabschnitt eines Auftrags (zwischen Start/Fortsetzen und Pause/Beenden). */
@@ -49,6 +53,8 @@ export interface Entry extends SyncMeta {
   startAt: Millis;
   /** null = läuft gerade */
   endAt: Millis | null;
+  /** Arbeitsschritt, in dem dieser Abschnitt gearbeitet wurde (null = ohne Schritt) */
+  step: string | null;
 }
 
 /** Abschnitt mit den Feldern seines Auftrags – flache Sicht für Statistik und Export. */
@@ -68,6 +74,8 @@ export interface Article extends SyncMeta {
   device: string;
   /** Veraltet: frühere „Bezeichnung“, wird beim Laden in die Benennung übernommen */
   description?: string;
+  /** Produktgruppe: Untergruppe oder Hauptgruppe (grp-device / grp-part); null = aus der Nummer ableiten */
+  groupId: string | null;
   /** Wer den Artikel zuletzt geändert hat (Team-Sync) */
   updatedBy?: string | null;
 }
@@ -136,4 +144,21 @@ export interface DeletionRequest extends SyncMeta {
   requestedBy: string | null;
   status: DeletionStatus;
   decidedBy: string | null;
+}
+
+/** Hauptgruppen – strikt getrennt */
+export type MainGroup = 'device' | 'part';
+
+/**
+ * Produktgruppe mit Ablauf (Arbeitsschritte in Reihenfolge). Die zwei Hauptgruppen haben feste IDs
+ * (grp-device, grp-part) und den Standard-Ablauf; Untergruppen (parentId gesetzt) können einen eigenen haben.
+ */
+export interface ProductGroup extends SyncMeta {
+  id: string;
+  main: MainGroup;
+  name: string;
+  /** null = Hauptgruppe */
+  parentId: string | null;
+  /** Arbeitsschritte in Reihenfolge; leer bei einer Untergruppe = Ablauf der Hauptgruppe */
+  steps: string[];
 }

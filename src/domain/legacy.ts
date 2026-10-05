@@ -1,4 +1,5 @@
-import type { Article, DeletionRequest, Dimension, DimensionValue, Entry, Job, Millis, Settings } from './types';
+import { withMainGroups } from './flows';
+import type { Article, DeletionRequest, Dimension, DimensionValue, Entry, Job, Millis, ProductGroup, Settings } from './types';
 
 /** Eintrag im Format bis Version 1 (ein Eintrag = ein Timer mit allen Feldern). */
 export interface LegacyEntry {
@@ -29,6 +30,8 @@ export interface BackupData {
   settingsUpdatedAt?: Millis;
   /** Löschvorschläge (gemeinsam) */
   deletionRequests?: DeletionRequest[];
+  /** Produktgruppen mit Ablauf (gemeinsam) */
+  groups?: ProductGroup[];
 }
 
 export interface LegacyBackupData {
@@ -59,9 +62,11 @@ export function legacyEntryToJob(e: LegacyEntry): { job: Job; entry: Entry } {
       startedAt: e.startAt,
       finishedAt: e.endAt,
       createdBy: null,
+      currentStep: null,
+      onlyStep: null,
       ...meta,
     },
-    entry: { id: e.id, jobId: e.id, startAt: e.startAt, endAt: e.endAt, ...meta },
+    entry: { id: e.id, jobId: e.id, startAt: e.startAt, endAt: e.endAt, step: null, ...meta },
   };
 }
 
@@ -71,11 +76,16 @@ export function legacyEntryToJob(e: LegacyEntry): { job: Job; entry: Entry } {
  */
 export function normalizeArticle(a: Article): Article {
   const legacy = (a.description ?? '').trim();
-  if (!legacy && typeof a.device === 'string' && a.description === undefined) return a;
+  if (!legacy && typeof a.device === 'string' && a.description === undefined && a.groupId !== undefined) return a;
   const name = a.name.trim();
   const merged = !legacy || legacy === name ? name : name ? `${name} – ${legacy}` : legacy;
   const { description: _old, ...rest } = a;
-  return { ...rest, name: merged, device: typeof a.device === 'string' ? a.device : '' };
+  return { ...rest, name: merged, device: typeof a.device === 'string' ? a.device : '', groupId: a.groupId ?? null };
+}
+
+/** Aufträge älterer Versionen: fehlende Felder ergänzen. */
+export function normalizeJob(j: Job): Job {
+  return { ...j, createdBy: j.createdBy ?? null, currentStep: j.currentStep ?? null, onlyStep: j.onlyStep ?? null };
 }
 
 /** Bringt ein Backup bzw. einen gespeicherten Stand beliebiger Version auf Version 2. */
@@ -84,8 +94,10 @@ export function upgradeBackup(data: BackupData | LegacyBackupData): BackupData {
     if (!Array.isArray(data.jobs) || !Array.isArray(data.entries)) throw new Error('Unbekanntes Backup-Format.');
     return {
       ...data,
-      jobs: data.jobs.map((j) => ({ ...j, createdBy: j.createdBy ?? null })),
+      jobs: data.jobs.map(normalizeJob),
+      entries: data.entries.map((e) => ({ ...e, step: e.step ?? null })),
       articles: (data.articles ?? []).map(normalizeArticle),
+      groups: withMainGroups(data.groups ?? []),
     };
   }
   if (data?.version !== 1 || !Array.isArray(data.entries)) throw new Error('Unbekanntes Backup-Format.');
@@ -98,6 +110,7 @@ export function upgradeBackup(data: BackupData | LegacyBackupData): BackupData {
     dimensions: data.dimensions ?? [],
     values: data.values ?? [],
     articles: (data.articles ?? []).map(normalizeArticle),
+    groups: withMainGroups([]),
     settings: data.settings,
   };
 }

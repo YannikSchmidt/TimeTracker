@@ -92,6 +92,18 @@ fragt nach („Bist du das auf einem weiteren Gerät?“) und führt die Daten z
 - Artikel und Merkmale (Projekt, Tags, …) sind gemeinsam und von allen änderbar.
 - Vorschläge (Aufträge, Artikel, Stückzahl, Nacharbeitsgründe) nutzen die Eingaben des ganzen Teams.
 
+## Abläufe und Arbeitsschritte
+
+*Artikel* → „Abläufe & Untergruppen bearbeiten“:
+- **Gesamtgeräte** und **Fronten / Einzelteile** sind getrennt. Je Hauptgruppe gibt es einen **Standard-Ablauf**
+  (Schritte in Reihenfolge, verschiebbar).
+- **Untergruppen** (z.B. „Kühlschrank“) können einen eigenen Ablauf haben; leer = Standard-Ablauf.
+- Die Hauptgruppe eines Artikels ergibt sich aus der Nummer (07… / 500000…); die Untergruppe wählt man im Artikel.
+
+Im Timer zeigt die Kachel den aktuellen Schritt; „<Schritt> fertig → <nächster>“ schließt ihn ab, die Zeit läuft
+nahtlos im nächsten Schritt weiter. Beim letzten Schritt beendet „Fertig“ den Auftrag. Beim Start kann man statt des
+ganzen Ablaufs „Nur <Schritt>“ wählen (z.B. beim Aushelfen).
+
 ## Admin und Löschen
 
 Löschen dürfen nur Admins (Liste `ADMINS` in `src/sync/config.ts`, derzeit `YannikSchmidt`). Alle anderen sehen

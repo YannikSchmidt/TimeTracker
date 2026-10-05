@@ -163,6 +163,29 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       WHERE trim(description) <> '';
     `);
   },
+
+  // v5: Produktgruppen mit Ablauf, Arbeitsschritte an Abschnitten und Aufträgen.
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE product_groups (
+        id TEXT PRIMARY KEY NOT NULL,
+        main TEXT NOT NULL,
+        name TEXT NOT NULL,
+        parent_id TEXT,
+        steps TEXT NOT NULL DEFAULT '[]',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        deleted_at INTEGER
+      );
+      INSERT INTO product_groups (id, main, name, parent_id, steps, created_at, updated_at)
+        VALUES ('grp-device', 'device', 'Gesamtgeräte', NULL, '[]', 0, 0),
+               ('grp-part', 'part', 'Fronten / Einzelteile', NULL, '[]', 0, 0);
+      ALTER TABLE articles ADD COLUMN group_id TEXT;
+      ALTER TABLE entries ADD COLUMN step TEXT;
+      ALTER TABLE jobs ADD COLUMN current_step TEXT;
+      ALTER TABLE jobs ADD COLUMN only_step TEXT;
+    `);
+  },
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

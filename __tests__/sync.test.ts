@@ -33,9 +33,9 @@ describe('Zusammenführen', () => {
   it('fixSingleRunning: nur der zuletzt gestartete läuft', () => {
     const job = (id: string): Job => ({
       id, kind: 'order', status: 'running', articleId: null, orderNo: null, quantity: null, note: '', valueIds: [],
-      reworkReason: null, parentJobId: null, startedAt: 0, finishedAt: null, createdBy: 'x', ...meta,
+      reworkReason: null, parentJobId: null, startedAt: 0, finishedAt: null, createdBy: 'x', currentStep: null, onlyStep: null, ...meta,
     });
-    const entry = (id: string, jobId: string, startAt: number): Entry => ({ id, jobId, startAt, endAt: null, ...meta });
+    const entry = (id: string, jobId: string, startAt: number): Entry => ({ id, jobId, startAt, endAt: null, step: null, ...meta });
     const r = fixSingleRunning([job('A'), job('B')], [entry('e1', 'A', 100), entry('e2', 'B', 200)], 300);
     expect(r.jobs.map((j) => j.status)).toEqual(['paused', 'running']);
     expect(r.entries.find((e) => e.id === 'e1')?.endAt).toBe(200);

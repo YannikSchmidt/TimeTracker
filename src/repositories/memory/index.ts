@@ -9,8 +9,10 @@ import {
   type Entry,
   type Job,
   type Millis,
+  type ProductGroup,
   type Settings,
 } from '../../domain/types';
+import { cleanSteps, withMainGroups } from '../../domain/flows';
 import { jobFieldsWithDefaults, sortOpenJobs, type JobStartInput, type Repositories } from '../types';
 import { duplicateArticleError, normalizeArticleNumber, notFound, validateQuantity, validateTimes } from '../validation';
 
@@ -51,6 +53,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
   let settings: Settings = { ...DEFAULT_SETTINGS, ...start?.settings };
   let settingsUpdatedAt: Millis = start?.settingsUpdatedAt ?? 0;
   let requests: DeletionRequest[] = (start?.deletionRequests ?? []).map((r) => ({ ...r }));
+  let groups: ProductGroup[] = withMainGroups(start?.groups ?? []).map(copyGroup);
 
   if (dimensions.length === 0) {
     dimensions = DEFAULT_DIMENSIONS.map((d, i) => ({
@@ -77,6 +80,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
     settings: { ...settings, workDays: [...settings.workDays] },
     settingsUpdatedAt,
     deletionRequests: requests.map((r) => ({ ...r })),
+    groups: groups.map(copyGroup),
   });
   const changed = () => persist?.(snapshot());
   const findArticle = (number: string) => (number ? articles.find((a) => a.number === number && !a.deletedAt) : undefined);
@@ -98,8 +102,8 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
     }
   };
 
-  const openEntry = (jobId: string, t: Millis) => {
-    entries.push({ id: makeId(), jobId, startAt: t, endAt: null, createdAt: t, updatedAt: t, deletedAt: null });
+  const openEntry = (jobId: string, t: Millis, step: string | null) => {
+    entries.push({ id: makeId(), jobId, startAt: t, endAt: null, step, createdAt: t, updatedAt: t, deletedAt: null });
   };
 
   const newJob = (input: JobStartInput, t: Millis, status: Job['status']): Job => {
@@ -114,6 +118,8 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
       startedAt: t,
       finishedAt: null,
       createdBy: owner(),
+      currentStep: input.onlyStep ?? input.currentStep ?? null,
+      onlyStep: input.onlyStep ?? null,
       createdAt: t,
       updatedAt: t,
       deletedAt: null,
@@ -156,6 +162,35 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         changed();
       },
     },
+    groups: {
+      async list() {
+        return groups.filter((g) => !g.deletedAt).map(copyGroup);
+      },
+      async create(input) {
+        const name = input.name.trim();
+        if (!name) throw new Error('Bitte einen Namen für die Untergruppe angeben.');
+        const dup = groups.find((g) => !g.deletedAt && g.parentId === input.parentId && g.name.toLowerCase() === name.toLowerCase());
+        if (dup) return copyGroup(dup);
+        const t = now();
+        const group: ProductGroup = {
+          id: makeId(), main: input.main, name, parentId: input.parentId, steps: cleanSteps(input.steps ?? []),
+          createdAt: t, updatedAt: t, deletedAt: null,
+        };
+        groups.push(group);
+        changed();
+        return copyGroup(group);
+      },
+      async update(id, input) {
+        const g = groups.find((x) => x.id === id && !x.deletedAt);
+        if (!g) throw notFound('Gruppe');
+        Object.assign(g, {
+          ...(input.name !== undefined && input.name.trim() ? { name: input.name.trim() } : {}),
+          ...(input.steps !== undefined ? { steps: cleanSteps(input.steps) } : {}),
+          updatedAt: now(),
+        });
+        changed();
+      },
+    },
     jobs: {
       async listOpen() {
         return sortOpenJobs(liveJobs().filter((j) => j.status !== 'done')).map(copyJob);
@@ -172,7 +207,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         const job = newJob(input, t, 'running');
         closeOpen(t);
         jobs.push(job);
-        openEntry(job.id, t);
+        openEntry(job.id, t, job.currentStep);
         changed();
         return copyJob(job);
       },
@@ -187,8 +222,20 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         if (j.status === 'running') return;
         const t = now();
         closeOpen(t);
-        openEntry(id, t);
+        openEntry(id, t, j.currentStep);
         Object.assign(j, { status: 'running', finishedAt: null, updatedAt: t });
+        changed();
+      },
+      async nextStep(id, next) {
+        const j = findJob(id);
+        const t = now();
+        const wasRunning = j.status === 'running';
+        closeOpen(t, id);
+        Object.assign(j, { currentStep: next, updatedAt: t });
+        if (wasRunning && next) {
+          openEntry(id, t, next);
+          j.status = 'running';
+        }
         changed();
       },
       async finish(id, extra = {}) {
@@ -231,7 +278,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         const job = newJob(input, startAt, 'done');
         job.finishedAt = endAt;
         jobs.push(job);
-        entries.push({ id: makeId(), jobId: job.id, startAt, endAt, createdAt: now(), updatedAt: now(), deletedAt: null });
+        entries.push({ id: makeId(), jobId: job.id, startAt, endAt, step: null, createdAt: now(), updatedAt: now(), deletedAt: null });
         changed();
         return copyJob(job);
       },
@@ -334,7 +381,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         if (findArticle(number)) throw duplicateArticleError(number);
         const t = now();
         const article: Article = {
-          id: makeId(), number, name: input.name.trim(), device: input.device.trim(),
+          id: makeId(), number, name: input.name.trim(), device: input.device.trim(), groupId: input.groupId ?? null,
           createdAt: t, updatedAt: t, deletedAt: null, updatedBy: owner(),
         };
         articles.push(article);
@@ -351,6 +398,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
           number,
           name: (input.name ?? a.name).trim(),
           device: (input.device ?? a.device).trim(),
+          groupId: input.groupId === undefined ? a.groupId : input.groupId,
           updatedAt: now(),
           updatedBy: owner(),
         });
@@ -446,14 +494,21 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
       settings = { ...DEFAULT_SETTINGS, ...next.settings };
       settingsUpdatedAt = next.settingsUpdatedAt ?? settingsUpdatedAt;
       requests = (next.deletionRequests ?? []).map((r) => ({ ...r }));
+      groups = withMainGroups(next.groups ?? []).map(copyGroup);
       changed();
     },
   };
 }
 
 function copyJob(j: Job): Job {
-  return { ...j, valueIds: [...(j.valueIds ?? [])], createdBy: j.createdBy ?? null };
+  return { ...j, valueIds: [...(j.valueIds ?? [])], createdBy: j.createdBy ?? null, currentStep: j.currentStep ?? null, onlyStep: j.onlyStep ?? null };
 }
+
+function copyGroup(g: ProductGroup): ProductGroup {
+  return { ...g, steps: [...g.steps] };
+}
+
+
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
   const i = list.findIndex((x) => x.id === item.id);

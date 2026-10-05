@@ -9,12 +9,13 @@ export interface EntryRow {
   job_id: string;
   start_at: number;
   end_at: number | null;
+  step: string | null;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
 }
 
-export const ENTRY_COLUMNS = 'id, job_id, start_at, end_at, created_at, updated_at, deleted_at';
+export const ENTRY_COLUMNS = 'id, job_id, start_at, end_at, step, created_at, updated_at, deleted_at';
 
 export function toEntry(row: EntryRow): Entry {
   return {
@@ -22,6 +23,7 @@ export function toEntry(row: EntryRow): Entry {
     jobId: row.job_id,
     startAt: row.start_at,
     endAt: row.end_at,
+    step: row.step ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,

@@ -23,11 +23,13 @@ function job(extra: Partial<Job> = {}): Job {
     startedAt: 0,
     finishedAt: null,
     createdBy: null,
+    currentStep: null,
+    onlyStep: null,
     ...meta,
     ...extra,
   };
 }
-const seg = (jobId: string, startAt: number, endAt: number | null): Entry => ({ id: `s${seq++}`, jobId, startAt, endAt, ...meta });
+const seg = (jobId: string, startAt: number, endAt: number | null): Entry => ({ id: `s${seq++}`, jobId, startAt, endAt, step: null, ...meta });
 
 describe('jobTimes', () => {
   it('Arbeitszeit = Summe der Abschnitte, Gesamtzeit = erster Start bis Abschluss', () => {
