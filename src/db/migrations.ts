@@ -186,6 +186,11 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       ALTER TABLE jobs ADD COLUMN only_step TEXT;
     `);
   },
+
+  // v6: Vorgabezeiten je Artikel und Arbeitsschritt (JSON, Minuten)
+  async (db) => {
+    await db.execAsync(`ALTER TABLE articles ADD COLUMN targets TEXT NOT NULL DEFAULT '{}';`);
+  },
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

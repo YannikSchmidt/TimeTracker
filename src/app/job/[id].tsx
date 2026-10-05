@@ -9,6 +9,7 @@ import { DeleteAction } from '../../components/DeleteAction';
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData } from '../../data/DataProvider';
 import { timeByStep } from '../../domain/flows';
+import { compareJob, deltaPct, formatPct, WHOLE_ORDER } from '../../domain/targets';
 import { jobName, jobTimes, reworkOf } from '../../domain/jobs';
 import { reworkReasons } from '../../domain/suggestions';
 import { formatClock, formatDuration, formatTime } from '../../domain/time';
@@ -95,9 +96,10 @@ export default function JobScreen() {
   const reworkMs = reworks.reduce((s, r) => s + r.workMs, 0);
   const parent = job?.parentJobId ? work.all.jobsById.get(job.parentJobId) : undefined;
   const isRework = job?.kind === 'rework';
+  const articleOf = (j: { articleId: string | null }) => (j.articleId ? articles.byId.get(j.articleId) : undefined);
   const flow = groups.flowOf(job?.articleId ? articles.byId.get(job.articleId) : undefined);
   const stepTimes = job ? timeByStep(entries, flow.steps, now).filter((s) => s.step !== null || entries.some((e) => e.step)) : [];
-  const articleOf = (j: { articleId: string | null }) => (j.articleId ? articles.byId.get(j.articleId) : undefined);
+  const cmp = job && !isRework ? compareJob(job, entries, articleOf(job), flow.steps, now) : null;
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
@@ -110,7 +112,16 @@ export default function JobScreen() {
           <Text style={[styles.bigTime, { color: p.text }]}>{formatClock(times.workMs)}</Text>
           <View style={styles.statRow}>
             <Stat label="Gesamtzeit" value={formatDuration(times.totalMs)} hint="erster Start bis Abschluss" />
-            <Stat label="Pausen" value={formatDuration(times.pausedMs)} />
+            {cmp?.targetMs ? (
+              <Stat
+                label="Vorgabe"
+                value={formatDuration(cmp.targetMs)}
+                hint={`Ist ${formatPct(cmp.deltaPct)}`}
+                color={(cmp.deltaPct ?? 0) > 0 ? p.danger : p.success}
+              />
+            ) : (
+              <Stat label="Pausen" value={formatDuration(times.pausedMs)} />
+            )}
             {!isRework && (
               <Stat
                 label="Nacharbeit"
@@ -135,25 +146,45 @@ export default function JobScreen() {
         </Card>
       )}
 
-      {job && stepTimes.length > 0 && (
-        <Card style={{ gap: spacing.sm }}>
-          <SectionTitle>Arbeitsschritte{job.onlyStep ? ' (nur ein Schritt)' : ''}</SectionTitle>
-          {stepTimes.map((s) => {
+      {job && cmp && (cmp.targetMs !== null || stepTimes.length > 0) && (
+        <Card style={{ gap: spacing.xs }}>
+          <SectionTitle>{flow.steps.length ? `Arbeitsschritte${job.onlyStep ? ' (nur ein Schritt)' : ''}` : 'Vorgabe'}</SectionTitle>
+          <View style={styles.stepRow}>
+            <Text style={[styles.th, { color: p.muted, flex: 1 }]}>{flow.steps.length ? 'Schritt' : ''}</Text>
+            <Text style={[styles.th, styles.num, { color: p.muted }]}>Ist</Text>
+            <Text style={[styles.th, styles.num, { color: p.muted }]}>Vorgabe</Text>
+            <Text style={[styles.th, styles.num, { color: p.muted }]}>Abw.</Text>
+          </View>
+          {[
+            ...cmp.byStep,
+            ...stepTimes.filter((t) => !cmp.byStep.some((b) => b.step === (t.step ?? ''))).map((t) => ({ step: t.step ?? '', actualMs: t.ms, targetMs: null })),
+          ].map((s) => {
             const current = s.step === job.currentStep && job.status !== 'done';
+            const pct = deltaPct(s.actualMs, s.targetMs);
             return (
-              <View key={s.step ?? '-'} style={styles.stepRow}>
-                <Text style={{ color: current ? p.primary : p.text, flex: 1, fontWeight: current ? '700' : '400' }}>
-                  {s.step ?? 'ohne Schritt'}
-                  {current ? '  ← aktuell' : ''}
+              <View key={s.step || '-'} style={styles.stepRow}>
+                <Text style={{ color: current ? p.primary : p.text, flex: 1, fontWeight: current ? '700' : '400' }} numberOfLines={1}>
+                  {s.step === WHOLE_ORDER ? (flow.steps.length ? 'ohne Schritt' : 'Ganzer Auftrag') : s.step}
+                  {current ? '  ←' : ''}
                 </Text>
-                <Text style={{ color: p.text, fontVariant: ['tabular-nums'] }}>{formatDuration(s.ms)}</Text>
+                <Text style={[styles.num, { color: p.text }]}>{formatDuration(s.actualMs)}</Text>
+                <Text style={[styles.num, { color: p.muted }]}>{s.targetMs === null ? '–' : formatDuration(s.targetMs)}</Text>
+                <Text style={[styles.num, { color: pct === null ? p.muted : pct > 0 ? p.danger : p.success, fontWeight: '600' }]}>{formatPct(pct)}</Text>
               </View>
             );
           })}
-          {flow.steps.filter((s) => !stepTimes.some((t) => t.step === s)).length > 0 && !job.onlyStep && (
-            <Text style={{ color: p.muted, fontSize: 12 }}>
-              Noch offen: {flow.steps.filter((s) => !stepTimes.some((t) => t.step === s)).join(', ')}
-            </Text>
+          {cmp.byStep.length > 1 && (
+            <View style={[styles.stepRow, styles.totalRow, { borderTopColor: p.border }]}>
+              <Text style={{ color: p.text, flex: 1, fontWeight: '700' }}>Gesamt</Text>
+              <Text style={[styles.num, { color: p.text, fontWeight: '700' }]}>{formatDuration(cmp.actualMs)}</Text>
+              <Text style={[styles.num, { color: p.muted }]}>{cmp.targetMs === null ? '–' : formatDuration(cmp.targetMs)}</Text>
+              <Text style={[styles.num, { color: cmp.deltaPct === null ? p.muted : cmp.deltaPct > 0 ? p.danger : p.success, fontWeight: '700' }]}>
+                {formatPct(cmp.deltaPct)}
+              </Text>
+            </View>
+          )}
+          {cmp.targetMs === null && (
+            <Text style={{ color: p.muted, fontSize: 12 }}>Für diesen Artikel sind noch keine Vorgabezeiten hinterlegt (Artikel → Vorgabezeiten).</Text>
           )}
         </Card>
       )}
@@ -346,6 +377,9 @@ function Stat({ label, value, hint, color }: { label: string; value: string; hin
 
 const styles = StyleSheet.create({
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 4 },
+  totalRow: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.xs, paddingTop: spacing.sm },
+  th: { fontSize: 12, fontWeight: '600' },
+  num: { width: 64, textAlign: 'right', fontVariant: ['tabular-nums'] },
   container: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xl * 2 },
   summary: { gap: spacing.sm },
   doneBadge: { fontWeight: '800', fontSize: 16 },

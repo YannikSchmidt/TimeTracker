@@ -10,8 +10,10 @@ import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
 import { DEFAULT_CODE_PATTERNS } from '../../domain/codes';
 import { jobsToCsv } from '../../domain/export';
+import { compareJob } from '../../domain/targets';
 import type { Dimension } from '../../domain/types';
 import { useDimensions, type DimensionsData } from '../../hooks/useDimensions';
+import { useGroups } from '../../hooks/useGroups';
 import { useWork } from '../../hooks/useWork';
 import { pickTextFile, shareTextFile } from '../../lib/files';
 import { useAppUpdate } from '../../lib/updates';
@@ -20,27 +22,20 @@ import type { BackupData } from '../../repositories/types';
 import { useTeam } from '../../sync/TeamContext';
 import { radius, spacing, usePalette, VALUE_COLORS } from '../../theme';
 
-const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-
 export default function SettingsScreen() {
   const p = usePalette();
   const { mutate, repos } = useData();
   const dims = useDimensions();
   const { data: settings } = useQuery((r) => r.settings.get());
-  const [hours, setHours] = useState('');
   const [newDimName, setNewDimName] = useState('');
   const [newDimMulti, setNewDimMulti] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const team = useTeam();
   const work = useWork();
+  const groups = useGroups();
   const update = useAppUpdate();
 
-  const [hoursFor, setHoursFor] = useState<number | null>(null);
-  if (settings && settings.weeklyTargetHours !== hoursFor) {
-    setHoursFor(settings.weeklyTargetHours);
-    setHours(String(settings.weeklyTargetHours).replace('.', ','));
-  }
   const [qty, setQty] = useState('');
   const [qtyFor, setQtyFor] = useState<number | null>(null);
   if (settings && settings.defaultQuantity !== qtyFor) {
@@ -57,23 +52,6 @@ export default function SettingsScreen() {
     }
   };
 
-  const saveHours = () => {
-    const value = Number(hours.replace(',', '.'));
-    if (Number.isFinite(value) && value >= 0 && value <= 168) {
-      void mutate((r) => r.settings.set({ weeklyTargetHours: value }));
-    } else if (settings) {
-      setHours(String(settings.weeklyTargetHours).replace('.', ','));
-    }
-  };
-
-  const toggleWorkDay = (day: number) => {
-    if (!settings) return;
-    const workDays = settings.workDays.includes(day)
-      ? settings.workDays.filter((d) => d !== day)
-      : [...settings.workDays, day].sort((a, b) => a - b);
-    void mutate((r) => r.settings.set({ workDays }));
-  };
-
   const addDimension = async () => {
     const name = newDimName.trim();
     if (!name) return;
@@ -87,7 +65,12 @@ export default function SettingsScreen() {
   const exportCsv = async () => {
     const [jobs, entries, articles] = await Promise.all([repos.jobs.listAll(), repos.entries.listAll(), repos.articles.list()]);
     // BOM, damit Excel Umlaute korrekt erkennt
-    const csv = '\uFEFF' + jobsToCsv(jobs, entries, dims.dimensions, dims.values, articles, Date.now());
+    const byId = new Map(articles.map((a) => [a.id, a]));
+    const targetOf = (job: (typeof jobs)[number]) => {
+      const article = job.articleId ? byId.get(job.articleId) : undefined;
+      return compareJob(job, entries.filter((e) => e.jobId === job.id), article, groups.flowOf(article).steps, Date.now()).targetMs;
+    };
+    const csv = '\uFEFF' + jobsToCsv(jobs, entries, dims.dimensions, dims.values, articles, Date.now(), targetOf);
     setStatus(await shareTextFile(`auftraege-${stamp()}.csv`, csv, 'text/csv'));
   };
 
@@ -110,26 +93,6 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <SectionTitle>Arbeitszeit</SectionTitle>
-      <Card style={{ gap: spacing.md }}>
-        <View style={styles.row}>
-          <Text style={[styles.label, { color: p.text, flex: 1 }]}>Sollstunden pro Woche</Text>
-          <TextInput
-            value={hours}
-            onChangeText={setHours}
-            onBlur={saveHours}
-            keyboardType="decimal-pad"
-            style={[styles.smallInput, { color: p.text, borderColor: p.border }]}
-          />
-        </View>
-        <Text style={{ color: p.muted }}>Arbeitstage</Text>
-        <View style={styles.wrap}>
-          {WEEKDAYS.map((label, i) => (
-            <Chip key={label} label={label} selected={settings?.workDays.includes(i + 1)} onPress={() => toggleWorkDay(i + 1)} />
-          ))}
-        </View>
-      </Card>
-
       <SectionTitle>Stückzahl</SectionTitle>
       <Card style={{ gap: spacing.sm }}>
         <View style={styles.row}>

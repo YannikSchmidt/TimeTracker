@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { jobName, jobTimes } from '../domain/jobs';
+import { compareJob, stepTargetMs } from '../domain/targets';
 import { formatClock, formatDuration } from '../domain/time';
 import type { Article, Entry, Job } from '../domain/types';
 import { articleDetails } from '../hooks/useArticles';
@@ -48,6 +49,8 @@ export function JobCard({
   const step = job.kind === 'order' ? job.currentStep : null;
   const stepIndex = step ? steps.indexOf(step) : -1;
   const next = !job.onlyStep && stepIndex >= 0 ? (steps[stepIndex + 1] ?? null) : null;
+  const cmp = job.kind === 'order' ? compareJob(job, entries, article, steps, now) : null;
+  const stepTarget = step ? stepTargetMs(article, step, job.quantity) : null;
   const stepTime = step ? entries.filter((e) => e.step === step && !e.deletedAt).reduce((s, e) => s + ((e.endAt ?? now) - e.startAt), 0) : 0;
   const details = [...(article ? articleDetails(article) : []), job.quantity != null ? `${job.quantity} Stk` : '']
     .filter(Boolean)
@@ -93,7 +96,14 @@ export function JobCard({
           ) : null}
           <View style={styles.timeRow}>
             <Text style={[styles.clock, { color: running ? p.text : p.muted }]}>{formatClock(t.workMs)}</Text>
-            <Text style={{ color: p.muted, fontSize: 12 }}>Arbeitszeit · gesamt {formatDuration(t.totalMs)}</Text>
+            <Text style={{ color: p.muted, fontSize: 12 }}>
+              Arbeitszeit · gesamt {formatDuration(t.totalMs)}
+              {cmp?.targetMs ? (
+                <Text style={{ color: cmp.actualMs > cmp.targetMs ? p.danger : p.success, fontWeight: '600' }}>
+                  {`  ·  Vorgabe ${formatDuration(cmp.targetMs)}`}
+                </Text>
+              ) : null}
+            </Text>
           </View>
         </Pressable>
         {step && (
@@ -105,7 +115,10 @@ export function JobCard({
               <Text style={{ color: p.text, fontSize: 18, fontWeight: '700', flex: 1 }} numberOfLines={1}>
                 {step}
               </Text>
-              <Text style={{ color: p.muted, fontVariant: ['tabular-nums'] }}>{formatClock(stepTime)}</Text>
+              <Text style={{ color: stepTarget && stepTime > stepTarget ? p.danger : p.muted, fontVariant: ['tabular-nums'] }}>
+                {formatClock(stepTime)}
+                {stepTarget ? ` / ${formatDuration(stepTarget)}` : ''}
+              </Text>
             </View>
             {next && (
               <Button

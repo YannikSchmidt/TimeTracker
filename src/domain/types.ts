@@ -76,6 +76,8 @@ export interface Article extends SyncMeta {
   description?: string;
   /** Produktgruppe: Untergruppe oder Hauptgruppe (grp-device / grp-part); null = aus der Nummer ableiten */
   groupId: string | null;
+  /** Vorgabezeiten in Minuten je Arbeitsschritt (Schlüssel = Schrittname, '' = ganzer Auftrag ohne Ablauf) */
+  targets: Record<string, { setup: number; perPiece: number }>;
   /** Wer den Artikel zuletzt geändert hat (Team-Sync) */
   updatedBy?: string | null;
 }

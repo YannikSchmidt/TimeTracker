@@ -104,6 +104,13 @@ Im Timer zeigt die Kachel den aktuellen Schritt; „<Schritt> fertig → <nächs
 nahtlos im nächsten Schritt weiter. Beim letzten Schritt beendet „Fertig“ den Auftrag. Beim Start kann man statt des
 ganzen Ablaufs „Nur <Schritt>“ wählen (z.B. beim Aushelfen).
 
+## Vorgabezeiten
+
+Im Artikel unter *Vorgabezeiten* je Arbeitsschritt **Rüsten** (Minuten, einmal pro Auftrag) und **je Stück**
+(Minuten pro Stück) eintragen; ohne Ablauf gibt es eine Zeile „Ganzer Auftrag“. Vorgabe = Summe aus Rüstzeit +
+Einzelzeit × Stückzahl. Verglichen wird mit der Zeit, in der der Timer lief: in der Kachel (rot = über Vorgabe), im
+abgeschlossenen Auftrag je Schritt und in der Statistik je Untergruppe und Artikel.
+
 ## Admin und Löschen
 
 Löschen dürfen nur Admins (Liste `ADMINS` in `src/sync/config.ts`, derzeit `YannikSchmidt`). Alle anderen sehen

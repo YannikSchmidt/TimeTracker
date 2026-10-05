@@ -38,7 +38,7 @@ export function GroupPicker({ number, groupId, onChange }: { number: string; gro
     onChange(g.id);
   };
 
-  const flow = groups.flowOf({ id: '', number, name: '', device: '', groupId, createdAt: 0, updatedAt: 0, deletedAt: null });
+  const flow = groups.flowOf({ id: '', number, name: '', device: '', groupId, targets: {}, createdAt: 0, updatedAt: 0, deletedAt: null });
 
   return (
     <View style={{ gap: spacing.sm }}>

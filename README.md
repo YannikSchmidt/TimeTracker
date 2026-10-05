@@ -22,6 +22,9 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
 - **Arbeitsschritte**: Gesamtgeräte und Fronten mit Untergruppen; jede Gruppe hat einen frei bearbeitbaren Ablauf
   (z.B. Teile holen → Gesamtmontage → Prüfen). Im Timer schließt „Schritt fertig“ den Schritt ab und startet den
   nächsten; die Zeit pro Schritt steht im Auftrag. Beim Start kann auch nur ein einzelner Schritt getrackt werden.
+- **Vorgabe gegen Ist**: Pro Artikel und Arbeitsschritt Rüstzeit (einmal pro Auftrag) und Einzelzeit (pro Stück) in
+  Minuten. Die Kachel zeigt die Vorgabe, der Auftrag Ist/Vorgabe/Abweichung je Schritt, die Statistik den Vergleich je
+  Untergruppe und Artikel (Gesamtgeräte und Fronten getrennt). Arbeits-/Fehlzeiten werden nicht ausgewertet (Stempeluhr).
 - **Vorschläge aus früheren Eingaben**: zuletzt verwendete Auftragsnummern, häufige Artikel, Stückzahl
   (häufigste des Artikels, sonst Standard 24 – einstellbar) und bisherige Nacharbeitsgründe.
 - **Nacharbeit**: eigener Timer zu einem Auftrag (offen oder abgeschlossen). Beim Beenden wird der Grund
@@ -34,8 +37,8 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
   Endgerät (freie Notiz) und Untergruppe. Beim Start lässt sich
   der Artikel auch über die Benennung suchen.
 - **Timer-Namen** aus Auftragsnummer und Benennung, z.B. „A-2026-0815 · Halter links“.
-- **Statistik** (Woche/Monat/Jahr): Arbeitszeit inkl. Anteil Nacharbeit, Soll/Ist, Aufträge, Verteilung nach
-  Artikel/Auftrag/Merkmal, Artikel & Stückzahlen (Zeit, Nacharbeit, Stück, Min/Stück), Nacharbeit nach Grund, Verlauf.
+- **Statistik** (Woche/Monat/Jahr): Zeit an Aufträgen, Ist gegen Vorgabe, Nacharbeit, Aufträge, Verteilung nach
+  Artikel/Auftrag/Merkmal, Artikel & Stückzahlen, Nacharbeit nach Grund, Verlauf.
 - **Team-Sync** (Web-App): verschlüsselt (AES-256, Team-Passwort) über ein privates GitHub-Repo; persönlicher Token
   pro Person, damit jede Änderung nachvollziehbar ist. Alle sehen alles (Filter *Ich / Person / Alle*),
   bearbeiten aber nur ihre eigenen Aufträge. Offline nutzbar, Abgleich automatisch.
@@ -45,7 +48,7 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
 - **Verbesserungsvorschläge** aus der App → Issues im privaten Daten-Repo (offline vorgemerkt).
 - **Automatische Updates**: keine Neuinstallation; die App lädt neue Versionen selbst (im Hintergrund oder per Hinweis).
 - **Scanner**: Live-Kamera (App und Web-App), alternativ per Foto.
-- **Einstellungen**: Sollstunden, Arbeitstage, Standard-Stückzahl, Merkmale, Team-Sync, CSV-Export pro Auftrag, JSON-Backup.
+- **Einstellungen**: Standard-Stückzahl, Nummernmuster, Merkmale, Team-Sync, CSV-Export pro Auftrag, JSON-Backup.
 
 ## Entwickeln und testen
 
