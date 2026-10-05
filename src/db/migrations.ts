@@ -191,6 +191,14 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
   async (db) => {
     await db.execAsync(`ALTER TABLE articles ADD COLUMN targets TEXT NOT NULL DEFAULT '{}';`);
   },
+
+  // v7: Personenzähler je Auftrag und Abschnitt
+  async (db) => {
+    await db.execAsync(`
+      ALTER TABLE jobs ADD COLUMN workers INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE entries ADD COLUMN workers INTEGER NOT NULL DEFAULT 1;
+    `);
+  },
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

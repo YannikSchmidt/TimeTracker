@@ -58,12 +58,17 @@ export function nextStep(steps: string[], current: string | null): string | null
   return i >= 0 && i + 1 < steps.length ? steps[i + 1] : null;
 }
 
-/** Arbeitszeit pro Schritt (in Reihenfolge des Ablaufs, danach weitere/ohne Schritt). */
-export function timeByStep(entries: Entry[], steps: string[], now: number): { step: string | null; ms: number }[] {
+/** Dauer eines Abschnitts; mit `persons` mal Personenzähler (Personenzeit). */
+export function entryMs(e: Entry, now: number, persons = false): number {
+  return ((e.endAt ?? now) - e.startAt) * (persons ? (e.workers ?? 1) : 1);
+}
+
+/** Arbeitszeit pro Schritt (in Reihenfolge des Ablaufs, danach weitere/ohne Schritt); optional als Personenzeit. */
+export function timeByStep(entries: Entry[], steps: string[], now: number, persons = false): { step: string | null; ms: number }[] {
   const sums = new Map<string | null, number>();
   for (const e of entries) {
     if (e.deletedAt) continue;
-    sums.set(e.step ?? null, (sums.get(e.step ?? null) ?? 0) + ((e.endAt ?? now) - e.startAt));
+    sums.set(e.step ?? null, (sums.get(e.step ?? null) ?? 0) + entryMs(e, now, persons));
   }
   const ordered: { step: string | null; ms: number }[] = steps.filter((s) => sums.has(s)).map((s) => ({ step: s, ms: sums.get(s)! }));
   for (const [step, ms] of sums) if (step !== null && !steps.includes(step)) ordered.push({ step, ms });

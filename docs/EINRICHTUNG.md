@@ -111,6 +111,14 @@ Im Artikel unter *Vorgabezeiten* je Arbeitsschritt **Rüsten** (Minuten, einmal 
 Einzelzeit × Stückzahl. Verglichen wird mit der Zeit, in der der Timer lief: in der Kachel (rot = über Vorgabe), im
 abgeschlossenen Auftrag je Schritt und in der Statistik je Untergruppe und Artikel.
 
+## Mehrere Personen an einem Auftrag
+
+- **Jede Person trackt selbst** (empfohlen): Alle starten einen Timer auf dieselbe Auftragsnummer (und denselben
+  Artikel). Die Kachel zeigt „Auch am Auftrag: …“, die Auftragsansicht alle Beteiligten; die Vorgabe gilt für alle
+  zusammen, und die Statistik zählt den Auftrag einmal.
+- **Eine Person trackt für mehrere**: Personenzähler beim Start oder in der Kachel (− / +). Die Zeit zählt ab dann
+  mal Personen (Personenzeit); ändert sich die Zahl, gilt die neue Anzahl ab diesem Moment.
+
 ## Admin und Löschen
 
 Löschen dürfen nur Admins (Liste `ADMINS` in `src/sync/config.ts`, derzeit `YannikSchmidt`). Alle anderen sehen

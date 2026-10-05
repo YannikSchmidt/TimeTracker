@@ -23,9 +23,9 @@ import {
   type BucketUnit,
   type PeriodKind,
 } from '../../domain/stats';
-import { compareJob, compareJobs, deltaPct, formatPct, type ComparisonRow } from '../../domain/targets';
+import { compareJobs, compareOrder, deltaPct, formatPct, orderKey, sameOrder, type ComparisonRow } from '../../domain/targets';
 import { formatDuration } from '../../domain/time';
-import { DEFAULT_SETTINGS } from '../../domain/types';
+import { DEFAULT_SETTINGS, type Job } from '../../domain/types';
 import { articleLabel, useArticles } from '../../hooks/useArticles';
 import { useDimensions } from '../../hooks/useDimensions';
 import { useGroups } from '../../hooks/useGroups';
@@ -78,10 +78,16 @@ export default function StatsScreen() {
       trend.count > 0 ? { start: shiftAnchor(kind, range.start, -(trend.count - 1)), end: range.end } : range;
     // Vorgabe gegen Ist: abgeschlossene Aufträge mit Abschluss im Zeitraum
     const finished = view.jobs.filter((j) => j.kind === 'order' && j.status === 'done' && j.finishedAt !== null && j.finishedAt >= range.start && j.finishedAt < range.end);
-    const compared = finished.map((job) => {
+    // Mehrere Timer am selben Auftrag (auch anderer Personen) zählen zusammen gegen eine Vorgabe
+    const byOrder = new Map<string, Job[]>();
+    for (const job of finished) byOrder.set(orderKey(job), [...(byOrder.get(orderKey(job)) ?? []), job]);
+    const compared = [...byOrder.values()].map((own) => {
+      const parts = work.all.jobs.filter((j) => j.kind === 'order' && (own.some((o) => o.id === j.id) || own.some((o) => sameOrder(o, j))));
+      const job = { ...own[0], quantity: Math.max(0, ...parts.map((j) => j.quantity ?? 0)) || own[0].quantity };
       const article = job.articleId ? articles.byId.get(job.articleId) : undefined;
       const flow = groups.flowOf(article);
-      return { job, flow, comparison: compareJob(job, view.entriesOf.get(job.id) ?? [], article, flow.steps, now) };
+      const comparison = compareOrder(parts.map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [] })), article, flow.steps, now);
+      return { job, flow, comparison };
     });
     const flowOfJob = new Map(compared.map((c) => [c.job.id, c.flow]));
     const mainKey = (id: string) => flowOfJob.get(id)?.main ?? 'none';
@@ -111,7 +117,7 @@ export default function StatsScreen() {
       production: articleProduction(entries, range, now),
       reworkReasons: reworkByReason(entries, view.jobs, range, now),
     };
-  }, [entries, range, kind, now, dimension, dims.values, group, articles.byId, view.jobs, view.entriesOf, groups]);
+  }, [entries, range, kind, now, dimension, dims.values, group, articles, view.jobs, work.all, groups]);
 
   const { kpis } = stats;
   const allVs = stats.vsMains.map((m) => m.total).filter((t): t is NonNullable<typeof t> => !!t);
@@ -186,7 +192,8 @@ export default function StatsScreen() {
                 nameOf={(key) => (key === '-' ? 'ohne Artikel' : articles.byId.get(key) ? articleLabel(articles.byId.get(key)!) : 'gelöscht')}
               />
               <Text style={{ color: p.muted, fontSize: 12 }}>
-                Abgeschlossene Aufträge im Zeitraum. Ist = Zeit, in der der Timer lief. Abweichung nur über Aufträge mit Vorgabe;
+                Abgeschlossene Aufträge im Zeitraum. Ist = Personenzeit (Timer lief × Personen); arbeiten mehrere Personen
+                mit eigenem Timer am selben Auftrag, zählt ihre Zeit zusammen. Abweichung nur über Aufträge mit Vorgabe;
                 Min/Stk = Ist geteilt durch Stückzahl.
               </Text>
             </View>

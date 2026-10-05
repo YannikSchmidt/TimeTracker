@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { QuantityField, parseQuantity } from '../components/EntryFields';
 import { ScannerView } from '../components/ScannerView';
+import { WorkersStepper } from '../components/WorkersStepper';
 import { Button, Card, Chip, SectionTitle } from '../components/ui';
 import { useData } from '../data/DataProvider';
 import { classifyCode, CODE_KIND_LABEL, isArticleKind, looksLikeNumber, type CodeKind } from '../domain/codes';
@@ -53,6 +54,8 @@ export default function StartScreen() {
   const [starting, setStarting] = useState(false);
   /** nur diesen Arbeitsschritt tracken (null = ganzer Ablauf) */
   const [onlyStep, setOnlyStep] = useState<string | null>(null);
+  /** Personenzähler: so viele Personen arbeiten mit diesem Timer */
+  const [workers, setWorkers] = useState(1);
   /** wechselt bei jedem neuen Scan-Schritt → Scanner startet neu */
   const [scanRound, setScanRound] = useState(0);
 
@@ -156,7 +159,7 @@ export default function StartScreen() {
     try {
       const steps = groups.flowOf(article).steps;
       await mutate((r) =>
-        r.jobs.start({ orderNo, articleId, quantity: parseQuantity(quantity), currentStep: steps[0] ?? null, onlyStep }),
+        r.jobs.start({ orderNo, articleId, quantity: parseQuantity(quantity), currentStep: steps[0] ?? null, onlyStep, workers }),
       );
       router.back();
     } catch (e) {
@@ -351,6 +354,14 @@ export default function StartScreen() {
               </Text>
             </View>
           )}
+          <View style={{ gap: spacing.sm }}>
+            <SectionTitle>Personen an diesem Timer</SectionTitle>
+            <WorkersStepper value={workers} onChange={setWorkers} />
+            <Text style={{ color: p.muted, fontSize: 12 }}>
+              Arbeiten mehrere zusammen und nur eine Person trackt, hier die Anzahl einstellen – die Zeit zählt dann mal
+              Personen. Wer selbst einen Timer auf denselben Auftrag startet, wird automatisch zusammengezählt.
+            </Text>
+          </View>
           <Button title="Start" icon="play" variant="success" size="large" onPress={() => void start()} disabled={starting} />
         </>
       )}

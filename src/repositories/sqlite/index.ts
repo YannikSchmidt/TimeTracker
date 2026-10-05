@@ -130,16 +130,16 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
           const status = localRunning && j.status === 'running' ? 'paused' : j.status;
           await db.runAsync(
             `INSERT INTO jobs (id, kind, status, article_id, order_no, quantity, note, parent_job_id, rework_reason,
-                               started_at, finished_at, current_step, only_step, created_at, updated_at, deleted_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               started_at, finished_at, current_step, only_step, workers, created_at, updated_at, deleted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, status = excluded.status, article_id = excluded.article_id,
                order_no = excluded.order_no, quantity = excluded.quantity, note = excluded.note,
                parent_job_id = excluded.parent_job_id, rework_reason = excluded.rework_reason,
                started_at = excluded.started_at, finished_at = excluded.finished_at,
-               current_step = excluded.current_step, only_step = excluded.only_step,
+               current_step = excluded.current_step, only_step = excluded.only_step, workers = excluded.workers,
                updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
             j.id, j.kind, status, articleId, j.orderNo, j.quantity, j.note ?? '', j.parentJobId, j.reworkReason,
-            j.startedAt, j.finishedAt, j.currentStep, j.onlyStep, j.createdAt, j.updatedAt, j.deletedAt,
+            j.startedAt, j.finishedAt, j.currentStep, j.onlyStep, j.workers ?? 1, j.createdAt, j.updatedAt, j.deletedAt,
           );
           await db.runAsync('DELETE FROM job_values WHERE job_id = ?', j.id);
           for (const valueId of j.valueIds ?? []) {
@@ -159,11 +159,11 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
         for (const e of data.entries) {
           const endAt = localRunning && e.endAt === null ? Math.max(now, e.startAt + 1) : e.endAt;
           await db.runAsync(
-            `INSERT INTO entries (id, job_id, start_at, end_at, step, created_at, updated_at, deleted_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO entries (id, job_id, start_at, end_at, step, workers, created_at, updated_at, deleted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET job_id = excluded.job_id, start_at = excluded.start_at, end_at = excluded.end_at,
-               step = excluded.step, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
-            e.id, e.jobId, e.startAt, endAt, e.step, e.createdAt, e.updatedAt, e.deletedAt,
+               step = excluded.step, workers = excluded.workers, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
+            e.id, e.jobId, e.startAt, endAt, e.step, e.workers ?? 1, e.createdAt, e.updatedAt, e.deletedAt,
           );
         }
       });

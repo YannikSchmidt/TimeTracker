@@ -11,6 +11,8 @@ export function useJobActions() {
     resume: (job: Job) => mutate((r) => r.jobs.resume(job.id)),
     /** Arbeitsschritt abschließen, mit dem nächsten weitermachen (Zeit läuft weiter) */
     nextStep: (job: Job, next: string | null) => mutate((r) => r.jobs.nextStep(job.id, next)),
+    /** Personenzähler ändern (laufende Zeit wird ab jetzt mit der neuen Anzahl gezählt) */
+    setWorkers: (job: Job, workers: number) => mutate((r) => r.jobs.setWorkers(job.id, workers)),
     /** Auftrag: sofort beenden und Abschluss zeigen. Nacharbeit: erst Grund abfragen. */
     finish: async (job: Job) => {
       if (job.kind === 'rework') {

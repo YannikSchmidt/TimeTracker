@@ -25,6 +25,8 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
 - **Vorgabe gegen Ist**: Pro Artikel und Arbeitsschritt Rüstzeit (einmal pro Auftrag) und Einzelzeit (pro Stück) in
   Minuten. Die Kachel zeigt die Vorgabe, der Auftrag Ist/Vorgabe/Abweichung je Schritt, die Statistik den Vergleich je
   Untergruppe und Artikel (Gesamtgeräte und Fronten getrennt). Arbeits-/Fehlzeiten werden nicht ausgewertet (Stempeluhr).
+- **Mehrere Personen**: Personenzähler im Timer (Zeit zählt mal Personen, änderbar während der Timer läuft).
+  Starten mehrere Personen eigene Timer auf denselben Auftrag, zählt ihre Zeit zusammen gegen die Vorgabe.
 - **Vorschläge aus früheren Eingaben**: zuletzt verwendete Auftragsnummern, häufige Artikel, Stückzahl
   (häufigste des Artikels, sonst Standard 24 – einstellbar) und bisherige Nacharbeitsgründe.
 - **Nacharbeit**: eigener Timer zu einem Auftrag (offen oder abgeschlossen). Beim Beenden wird der Grund

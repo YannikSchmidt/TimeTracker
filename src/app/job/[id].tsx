@@ -8,8 +8,8 @@ import { DimensionPicker } from '../../components/ValuePicker';
 import { DeleteAction } from '../../components/DeleteAction';
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData } from '../../data/DataProvider';
-import { timeByStep } from '../../domain/flows';
-import { compareJob, deltaPct, formatPct, WHOLE_ORDER } from '../../domain/targets';
+import { entryMs, timeByStep } from '../../domain/flows';
+import { compareOrder, deltaPct, formatPct, sameOrder, WHOLE_ORDER } from '../../domain/targets';
 import { jobName, jobTimes, reworkOf } from '../../domain/jobs';
 import { reworkReasons } from '../../domain/suggestions';
 import { formatClock, formatDuration, formatTime } from '../../domain/time';
@@ -99,7 +99,10 @@ export default function JobScreen() {
   const articleOf = (j: { articleId: string | null }) => (j.articleId ? articles.byId.get(j.articleId) : undefined);
   const flow = groups.flowOf(job?.articleId ? articles.byId.get(job.articleId) : undefined);
   const stepTimes = job ? timeByStep(entries, flow.steps, now).filter((s) => s.step !== null || entries.some((e) => e.step)) : [];
-  const cmp = job && !isRework ? compareJob(job, entries, articleOf(job), flow.steps, now) : null;
+  // Andere Timer am selben Auftrag (z.B. Kollegen) zählen zusammen gegen die Vorgabe
+  const partners = job && !isRework ? work.all.jobs.filter((j) => j.id !== job.id && !j.deletedAt && sameOrder(job, j)) : [];
+  const parts = job ? [{ job, entries }, ...partners.map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [] }))] : [];
+  const cmp = job && !isRework ? compareOrder(parts, articleOf(job), flow.steps, now) : null;
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
@@ -148,7 +151,10 @@ export default function JobScreen() {
 
       {job && cmp && (cmp.targetMs !== null || stepTimes.length > 0) && (
         <Card style={{ gap: spacing.xs }}>
-          <SectionTitle>{flow.steps.length ? `Arbeitsschritte${job.onlyStep ? ' (nur ein Schritt)' : ''}` : 'Vorgabe'}</SectionTitle>
+          <SectionTitle>
+            {flow.steps.length ? `Arbeitsschritte${job.onlyStep ? ' (nur ein Schritt)' : ''}` : 'Vorgabe'}
+            {partners.length ? ' · alle Timer zusammen' : ''}
+          </SectionTitle>
           <View style={styles.stepRow}>
             <Text style={[styles.th, { color: p.muted, flex: 1 }]}>{flow.steps.length ? 'Schritt' : ''}</Text>
             <Text style={[styles.th, styles.num, { color: p.muted }]}>Ist</Text>
@@ -186,6 +192,25 @@ export default function JobScreen() {
           {cmp.targetMs === null && (
             <Text style={{ color: p.muted, fontSize: 12 }}>Für diesen Artikel sind noch keine Vorgabezeiten hinterlegt (Artikel → Vorgabezeiten).</Text>
           )}
+        </Card>
+      )}
+
+      {job && partners.length > 0 && (
+        <Card style={{ gap: spacing.xs }}>
+          <SectionTitle>Am Auftrag beteiligt</SectionTitle>
+          {parts.map(({ job: j, entries: es }) => (
+            <View key={j.id} style={styles.stepRow}>
+              <Text style={{ color: p.text, flex: 1, fontWeight: j.id === job.id ? '700' : '400' }} numberOfLines={1}>
+                {j.id === job.id ? 'Dieser Timer' : work.nameOf(j.createdBy)}
+                {(j.workers ?? 1) > 1 ? ` (${j.workers} Pers.)` : ''}
+                {j.status === 'running' ? ' · läuft' : j.status === 'paused' ? ' · pausiert' : ''}
+              </Text>
+              <Text style={[styles.num, { color: p.text }]}>
+                {formatDuration(es.filter((e) => !e.deletedAt).reduce((s, e) => s + entryMs(e, now, true), 0))}
+              </Text>
+            </View>
+          ))}
+          <Text style={{ color: p.muted, fontSize: 12 }}>Personenzeit je Timer (Zeit × Personen). Die Vorgabe gilt für alle zusammen.</Text>
         </Card>
       )}
 

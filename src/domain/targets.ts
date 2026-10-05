@@ -1,4 +1,4 @@
-import { timeByStep } from './flows';
+import { entryMs, timeByStep } from './flows';
 import type { Article, Entry, Job, Millis } from './types';
 
 /** Vorgabe eines Arbeitsschritts in Minuten: Rüstzeit (einmal pro Auftrag) + Einzelzeit (pro Stück). */
@@ -25,7 +25,7 @@ export function stepTargetMs(article: Article | null | undefined, step: string, 
 }
 
 export interface Comparison {
-  /** tatsächliche Zeit (Timer lief) */
+  /** tatsächliche Zeit als Personenzeit (Timer lief × Personenzähler, über alle beteiligten Timer) */
   actualMs: Millis;
   /** Summe der Vorgaben; null = keine Vorgabe hinterlegt */
   targetMs: Millis | null;
@@ -39,22 +39,45 @@ export function deltaPct(actualMs: Millis, targetMs: Millis | null): number | nu
 }
 
 /**
- * Vorgabe gegen Ist für einen Auftrag. Gezählt wird nur die Zeit, in der der Timer lief.
+ * Vorgabe gegen Ist für einen Auftrag. Gezählt wird die Zeit, in der der Timer lief, mal Personenzähler.
  * Mit Arbeitsschritten wird pro Schritt verglichen, ohne Ablauf der ganze Auftrag.
  */
 export function compareJob(job: Job, entries: Entry[], article: Article | null | undefined, steps: string[], now: Millis): Comparison {
-  const relevant = targetSteps(steps, job.onlyStep);
-  const live = entries.filter((e) => !e.deletedAt);
-  const total = live.reduce((s, e) => s + ((e.endAt ?? now) - e.startAt), 0);
-  const actualByStep = new Map(timeByStep(live, steps, now).map((s) => [s.step, s.ms]));
+  return compareOrder([{ job, entries }], article, steps, now);
+}
+
+/**
+ * Vergleich über mehrere Timer am selben Auftrag (z.B. zwei Personen, jede mit eigenem Timer):
+ * Personenzeiten werden addiert, die Vorgabe gilt einmal für den Auftrag (größte angegebene Stückzahl).
+ */
+export function compareOrder(parts: { job: Job; entries: Entry[] }[], article: Article | null | undefined, steps: string[], now: Millis): Comparison {
+  const onlySteps = parts.every((p) => p.job.onlyStep) ? new Set(parts.map((p) => p.job.onlyStep!)) : null;
+  const relevant = onlySteps
+    ? [...steps.filter((s) => onlySteps.has(s)), ...[...onlySteps].filter((s) => !steps.includes(s))]
+    : targetSteps(steps);
+  const quantities = parts.map((p) => p.job.quantity).filter((q): q is number => q !== null);
+  const quantity = quantities.length ? Math.max(...quantities) : null;
+  const live = parts.flatMap((p) => p.entries).filter((e) => !e.deletedAt);
+  const total = live.reduce((s, e) => s + entryMs(e, now, true), 0);
+  const actualByStep = new Map(timeByStep(live, steps, now, true).map((s) => [s.step, s.ms]));
   const byStep = relevant.map((step) => ({
     step,
     actualMs: step === WHOLE_ORDER ? total : (actualByStep.get(step) ?? 0),
-    targetMs: stepTargetMs(article, step, job.quantity),
+    targetMs: stepTargetMs(article, step, quantity),
   }));
   const withTarget = byStep.filter((s) => s.targetMs !== null);
   const targetMs = withTarget.length ? withTarget.reduce((s, x) => s + x.targetMs!, 0) : null;
   return { actualMs: total, targetMs, deltaPct: deltaPct(total, targetMs), byStep };
+}
+
+/** Timer am selben Auftrag: gleiche Auftragsnummer und gleicher Artikel (nur Aufträge, keine Nacharbeit). */
+export function sameOrder(a: Job, b: Job): boolean {
+  return a.kind === 'order' && b.kind === 'order' && !!a.orderNo && a.orderNo === b.orderNo && a.articleId === b.articleId;
+}
+
+/** Schlüssel zum Zusammenfassen mehrerer Timer eines Auftrags */
+export function orderKey(job: Job): string {
+  return job.orderNo ? `${job.orderNo}|${job.articleId ?? ''}` : `job:${job.id}`;
 }
 
 /** „+12 %“ / „−5 %“ */

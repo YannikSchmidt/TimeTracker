@@ -3,13 +3,15 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { jobName, jobTimes } from '../domain/jobs';
-import { compareJob, stepTargetMs } from '../domain/targets';
+import { entryMs } from '../domain/flows';
+import { compareOrder, stepTargetMs } from '../domain/targets';
 import { formatClock, formatDuration } from '../domain/time';
 import type { Article, Entry, Job } from '../domain/types';
 import { articleDetails } from '../hooks/useArticles';
 import { useJobActions } from '../hooks/useJobActions';
 import { orderColor, radius, spacing, usePalette } from '../theme';
 import { Button } from './ui';
+import { WorkersStepper } from './WorkersStepper';
 
 export interface SubJob {
   job: Job;
@@ -25,6 +27,7 @@ export function JobCard({
   entries,
   article,
   reworks = [],
+  partners = [],
   steps = [],
   now,
 }: {
@@ -33,6 +36,8 @@ export function JobCard({
   article?: Article;
   /** offene Nacharbeiten zu diesem Auftrag */
   reworks?: SubJob[];
+  /** Timer anderer Personen am selben Auftrag (zählen zusammen gegen die Vorgabe) */
+  partners?: (SubJob & { name: string })[];
   /** Ablauf des Artikels (Arbeitsschritte in Reihenfolge) */
   steps?: string[];
   now: number;
@@ -49,7 +54,9 @@ export function JobCard({
   const step = job.kind === 'order' ? job.currentStep : null;
   const stepIndex = step ? steps.indexOf(step) : -1;
   const next = !job.onlyStep && stepIndex >= 0 ? (steps[stepIndex + 1] ?? null) : null;
-  const cmp = job.kind === 'order' ? compareJob(job, entries, article, steps, now) : null;
+  const cmp = job.kind === 'order' ? compareOrder([{ job, entries }, ...partners], article, steps, now) : null;
+  const workers = job.workers ?? 1;
+  const personMs = entries.filter((e) => !e.deletedAt).reduce((s, e) => s + entryMs(e, now, true), 0);
   const stepTarget = step ? stepTargetMs(article, step, job.quantity) : null;
   const stepTime = step ? entries.filter((e) => e.step === step && !e.deletedAt).reduce((s, e) => s + ((e.endAt ?? now) - e.startAt), 0) : 0;
   const details = [...(article ? articleDetails(article) : []), job.quantity != null ? `${job.quantity} Stk` : '']
@@ -98,6 +105,7 @@ export function JobCard({
             <Text style={[styles.clock, { color: running ? p.text : p.muted }]}>{formatClock(t.workMs)}</Text>
             <Text style={{ color: p.muted, fontSize: 12 }}>
               Arbeitszeit · gesamt {formatDuration(t.totalMs)}
+              {personMs !== t.workMs ? ` · Personenzeit ${formatDuration(personMs)}` : ''}
               {cmp?.targetMs ? (
                 <Text style={{ color: cmp.actualMs > cmp.targetMs ? p.danger : p.success, fontWeight: '600' }}>
                   {`  ·  Vorgabe ${formatDuration(cmp.targetMs)}`}
@@ -106,6 +114,18 @@ export function JobCard({
             </Text>
           </View>
         </Pressable>
+        {job.kind === 'order' && (
+          <View style={styles.peopleRow}>
+            <WorkersStepper compact value={workers} onChange={(n) => void actions.setWorkers(job, n)} />
+          </View>
+        )}
+        {partners.length > 0 && (
+          <Text style={{ color: p.muted, fontSize: 12 }} numberOfLines={2}>
+            <Ionicons name="people-outline" size={13} color={p.muted} /> Auch am Auftrag:{' '}
+            {partners.map((x) => `${x.name}${x.job.status === 'running' ? ' (läuft)' : x.job.status === 'done' ? ' (fertig)' : ''}`).join(', ')}
+            {cmp?.targetMs ? ' – Vorgabe zählt für alle zusammen' : ''}
+          </Text>
+        )}
         {step && (
           <View style={[styles.step, { backgroundColor: color + '14', borderColor: color + '55' }]}>
             <Text style={{ color: p.muted, fontSize: 12 }}>
@@ -204,5 +224,6 @@ const styles = StyleSheet.create({
   subClock: { fontSize: 22, fontWeight: '300', fontVariant: ['tabular-nums'] },
   step: { borderWidth: 1, borderRadius: radius.md, padding: spacing.sm, gap: spacing.xs },
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  peopleRow: { flexDirection: 'row', alignItems: 'center' },
   reworkLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 4 },
 });
