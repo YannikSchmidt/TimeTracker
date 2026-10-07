@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { jobName, jobTimes } from '../domain/jobs';
 import { entryMs } from '../domain/flows';
-import { compareOrder, stepTargetMs } from '../domain/targets';
+import { compareShare, stepTargetMs } from '../domain/targets';
 import { formatClock, formatDuration } from '../domain/time';
 import type { Article, Entry, Job } from '../domain/types';
 import { articleDetails } from '../hooks/useArticles';
@@ -36,7 +36,7 @@ export function JobCard({
   article?: Article;
   /** offene Nacharbeiten zu diesem Auftrag */
   reworks?: SubJob[];
-  /** Timer anderer Personen am selben Auftrag (zählen zusammen gegen die Vorgabe) */
+  /** Timer anderer Personen am selben Auftrag (die Vorgabe wird im Verhältnis der Zeit aufgeteilt) */
   partners?: (SubJob & { name: string })[];
   /** Ablauf des Artikels (Arbeitsschritte in Reihenfolge) */
   steps?: string[];
@@ -54,7 +54,7 @@ export function JobCard({
   const step = job.kind === 'order' ? job.currentStep : null;
   const stepIndex = step ? steps.indexOf(step) : -1;
   const next = !job.onlyStep && stepIndex >= 0 ? (steps[stepIndex + 1] ?? null) : null;
-  const cmp = job.kind === 'order' ? compareOrder([{ job, entries }, ...partners], article, steps, now) : null;
+  const cmp = job.kind === 'order' ? compareShare([{ job, entries }, ...partners], new Set([job.id]), article, steps, now) : null;
   const workers = job.workers ?? 1;
   const personMs = entries.filter((e) => !e.deletedAt).reduce((s, e) => s + entryMs(e, now, true), 0);
   const stepTarget = step ? stepTargetMs(article, step, job.quantity) : null;
@@ -123,7 +123,7 @@ export function JobCard({
           <Text style={{ color: p.muted, fontSize: 12 }} numberOfLines={2}>
             <Ionicons name="people-outline" size={13} color={p.muted} /> Auch am Auftrag:{' '}
             {partners.map((x) => `${x.name}${x.job.status === 'running' ? ' (läuft)' : x.job.status === 'done' ? ' (fertig)' : ''}`).join(', ')}
-            {cmp?.targetMs ? ' – Vorgabe zählt für alle zusammen' : ''}
+            {cmp?.targetMs ? ' – Vorgabe wird nach geleisteter Zeit aufgeteilt' : ''}
           </Text>
         )}
         {step && (

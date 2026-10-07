@@ -88,7 +88,11 @@ fragt nach („Bist du das auf einem weiteren Gerät?“) und führt die Daten z
 
 ## Wer darf was?
 
-- Alle sehen alle Aufträge (Verlauf/Statistik → Filter *Ich / Person / Alle*), bearbeiten aber nur ihre eigenen.
+- **Datenschutz:** Jede Person sieht in Verlauf und Statistik nur ihre eigenen Aufträge und Zeiten und bearbeitet nur
+  diese. Zeiten anderer werden nirgends angezeigt. Die Statistik zeigt höchstens ein Lob, wenn man im Zeitraum am
+  schnellsten bzw. bei den Schnelleren im Team war (gemessen an der Vorgabe) – Langsamere sehen dazu nichts.
+  Technisch liegen die Daten weiterhin verschlüsselt im gemeinsamen Daten-Repo (nötig für Sync, Vorschläge und die
+  Aufteilung der Vorgabe); die App zeigt sie nur nicht an.
 - Artikel und Merkmale (Projekt, Tags, …) sind gemeinsam und von allen änderbar.
 - Vorschläge (Aufträge, Artikel, Stückzahl, Nacharbeitsgründe) nutzen die Eingaben des ganzen Teams.
 
@@ -114,8 +118,9 @@ abgeschlossenen Auftrag je Schritt und in der Statistik je Untergruppe und Artik
 ## Mehrere Personen an einem Auftrag
 
 - **Jede Person trackt selbst** (empfohlen): Alle starten einen Timer auf dieselbe Auftragsnummer (und denselben
-  Artikel). Die Kachel zeigt „Auch am Auftrag: …“, die Auftragsansicht alle Beteiligten; die Vorgabe gilt für alle
-  zusammen, und die Statistik zählt den Auftrag einmal.
+  Artikel). Die Kachel zeigt „Auch am Auftrag: …“, die Auftragsansicht die Namen der Beteiligten (ohne deren
+  Zeiten). Die Vorgabe wird im Verhältnis der geleisteten Zeit aufgeteilt: 15 h Vorgabe, A arbeitet 8 h und B 2 h →
+  A bekommt 12 h und B 3 h gutgeschrieben. Kachel, Auftragsansicht und Statistik zeigen jeweils den eigenen Anteil.
 - **Eine Person trackt für mehrere**: Personenzähler beim Start oder in der Kachel (− / +). Die Zeit zählt ab dann
   mal Personen (Personenzeit); ändert sich die Zahl, gilt die neue Anzahl ab diesem Moment.
 
