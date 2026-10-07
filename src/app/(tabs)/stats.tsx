@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BarChart, DonutChart, ShareList, type ShareDatum } from '../../components/charts';
-import { OwnerFilterBar } from '../../components/OwnerFilterBar';
 import { Card, Chip, Empty, Expandable, Segmented } from '../../components/ui';
 import {
   articleProduction,
@@ -23,14 +22,14 @@ import {
   type BucketUnit,
   type PeriodKind,
 } from '../../domain/stats';
-import { compareJobs, compareOrder, deltaPct, formatPct, orderKey, sameOrder, type ComparisonRow } from '../../domain/targets';
+import { compareJobs, compareShare, deltaPct, formatPct, orderKey, sameOrder, teamPraise, type ComparisonRow } from '../../domain/targets';
 import { formatDuration } from '../../domain/time';
 import { DEFAULT_SETTINGS, type Job } from '../../domain/types';
 import { articleLabel, useArticles } from '../../hooks/useArticles';
 import { useDimensions } from '../../hooks/useDimensions';
 import { useGroups } from '../../hooks/useGroups';
 import { useNow } from '../../hooks/useNow';
-import { useWork, type OwnerFilter } from '../../hooks/useWork';
+import { useWork } from '../../hooks/useWork';
 import { spacing, usePalette, VALUE_COLORS } from '../../theme';
 
 const PERIODS: { value: PeriodKind; label: string }[] = [
@@ -61,10 +60,10 @@ export default function StatsScreen() {
   const [group, setGroup] = useState<string>('article');
 
   const work = useWork();
-  const [owner, setOwner] = useState<OwnerFilter>('me');
   const groups = useGroups();
   const [vsMain, setVsMain] = useState<'device' | 'part' | 'none'>('device');
-  const view = work.view(owner);
+  // Datenschutz: Die Statistik zeigt nur die eigenen Zeiten; mit dem Team gibt es nur einen groben, positiven Vergleich.
+  const view = work.view('me');
   const entries = view.segments;
 
   const range = useMemo(() => periodRange(kind, anchor), [kind, anchor]);
@@ -76,22 +75,43 @@ export default function StatsScreen() {
     const trend = TREND[kind];
     const trendRange =
       trend.count > 0 ? { start: shiftAnchor(kind, range.start, -(trend.count - 1)), end: range.end } : range;
-    // Vorgabe gegen Ist: abgeschlossene Aufträge mit Abschluss im Zeitraum
-    const finished = view.jobs.filter((j) => j.kind === 'order' && j.status === 'done' && j.finishedAt !== null && j.finishedAt >= range.start && j.finishedAt < range.end);
-    // Mehrere Timer am selben Auftrag (auch anderer Personen) zählen zusammen gegen eine Vorgabe
-    const byOrder = new Map<string, Job[]>();
-    for (const job of finished) byOrder.set(orderKey(job), [...(byOrder.get(orderKey(job)) ?? []), job]);
-    const compared = [...byOrder.values()].map((own) => {
-      const parts = work.all.jobs.filter((j) => j.kind === 'order' && (own.some((o) => o.id === j.id) || own.some((o) => sameOrder(o, j))));
-      const job = { ...own[0], quantity: Math.max(0, ...parts.map((j) => j.quantity ?? 0)) || own[0].quantity };
+    // Vorgabe gegen Ist: abgeschlossene Aufträge mit Abschluss im Zeitraum. Arbeiten mehrere am selben Auftrag,
+    // wird die Vorgabe im Verhältnis der geleisteten Zeit aufgeteilt (eigener Anteil).
+    const inRange = (j: Job) => j.kind === 'order' && j.status === 'done' && j.finishedAt !== null && j.finishedAt >= range.start && j.finishedAt < range.end;
+    const shareOf = (mine: Job[]) => {
+      const parts = work.all.jobs.filter((j) => j.kind === 'order' && (mine.some((o) => o.id === j.id) || mine.some((o) => sameOrder(o, j))));
+      const job = { ...mine[0], quantity: Math.max(0, ...parts.map((j) => j.quantity ?? 0)) || mine[0].quantity };
       const article = job.articleId ? articles.byId.get(job.articleId) : undefined;
       const flow = groups.flowOf(article);
-      const comparison = compareOrder(parts.map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [] })), article, flow.steps, now);
+      const own = new Set(mine.map((j) => j.id));
+      const comparison = compareShare(parts.map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [] })), own, article, flow.steps, now);
       return { job, flow, comparison };
-    });
+    };
+    const byOrder = (jobs: Job[]) => {
+      const map = new Map<string, Job[]>();
+      for (const job of jobs) map.set(orderKey(job), [...(map.get(orderKey(job)) ?? []), job]);
+      return [...map.values()];
+    };
+    const compared = byOrder(view.jobs.filter(inRange)).map(shareOf);
+    // Grober Team-Vergleich: je Person Summe aus Ist und anteiliger Vorgabe – angezeigt wird nur ein Lob
+    const people = new Map<string, Job[]>();
+    for (const j of work.all.jobs.filter(inRange)) {
+      const who = work.ownerOf(j) ?? '-';
+      people.set(who, [...(people.get(who) ?? []), j]);
+    }
+    const praise = work.me
+      ? teamPraise(
+          work.me,
+          [...people.entries()].map(([id, jobs]) => {
+            const shares = byOrder(jobs).map((g) => shareOf(g).comparison).filter((c) => c.targetMs);
+            return { id, actualMs: shares.reduce((s, c) => s + c.actualMs, 0), targetMs: shares.reduce((s, c) => s + c.targetMs!, 0) };
+          }),
+        )
+      : null;
     const flowOfJob = new Map(compared.map((c) => [c.job.id, c.flow]));
     const mainKey = (id: string) => flowOfJob.get(id)?.main ?? 'none';
     return {
+      praise,
       kpis: computeKpis(entries, range, DEFAULT_SETTINGS, now),
       buckets: bucketTotals(entries, range, unit, now),
       vsMains: (['device', 'part', 'none'] as const).map((main) => {
@@ -117,7 +137,7 @@ export default function StatsScreen() {
       production: articleProduction(entries, range, now),
       reworkReasons: reworkByReason(entries, view.jobs, range, now),
     };
-  }, [entries, range, kind, now, dimension, dims.values, group, articles, view.jobs, work.all, groups]);
+  }, [entries, range, kind, now, dimension, dims.values, group, articles, view.jobs, work, groups]);
 
   const { kpis } = stats;
   const allVs = stats.vsMains.map((m) => m.total).filter((t): t is NonNullable<typeof t> => !!t);
@@ -127,7 +147,6 @@ export default function StatsScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <OwnerFilterBar others={work.others} nameOf={work.nameOf} value={owner} onChange={setOwner} />
       <Segmented options={PERIODS} value={kind} onChange={setKind} />
 
       <View style={styles.periodRow}>
@@ -159,6 +178,13 @@ export default function StatsScreen() {
         <Kpi label="Nacharbeit" value={formatDuration(kpis.reworkMs)} color={kpis.reworkMs > 0 ? p.warning : undefined} />
         <Kpi label="Aufträge" value={String(kpis.jobCount)} hint={`${allVs.reduce((s, t) => s + t.jobs, 0)} abgeschlossen`} />
       </View>
+
+      {stats.praise && (
+        <Card style={[styles.praise, { borderColor: p.success, backgroundColor: p.success + '14' }]}>
+          <Ionicons name="trophy" size={22} color={p.success} />
+          <Text style={{ color: p.text, fontWeight: '700', flex: 1 }}>{stats.praise}</Text>
+        </Card>
+      )}
 
       <Card>
         <BarChart data={stats.buckets} />
@@ -192,9 +218,10 @@ export default function StatsScreen() {
                 nameOf={(key) => (key === '-' ? 'ohne Artikel' : articles.byId.get(key) ? articleLabel(articles.byId.get(key)!) : 'gelöscht')}
               />
               <Text style={{ color: p.muted, fontSize: 12 }}>
-                Abgeschlossene Aufträge im Zeitraum. Ist = Personenzeit (Timer lief × Personen); arbeiten mehrere Personen
-                mit eigenem Timer am selben Auftrag, zählt ihre Zeit zusammen. Abweichung nur über Aufträge mit Vorgabe;
-                Min/Stk = Ist geteilt durch Stückzahl.
+                Deine abgeschlossenen Aufträge im Zeitraum. Ist = Personenzeit (Timer lief × Personen). Arbeiten mehrere am
+                selben Auftrag, wird die Vorgabe im Verhältnis der geleisteten Zeit aufgeteilt – hier steht dein Anteil.
+                Abweichung nur über Aufträge mit Vorgabe; Min/Stk = Ist geteilt durch Stückzahl. Zeiten anderer sind nicht
+                einsehbar.
               </Text>
             </View>
           );
@@ -398,6 +425,7 @@ const styles = StyleSheet.create({
   today: { textAlign: 'center', fontSize: 12, marginTop: 2 },
   kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   kpi: { flexBasis: '47%', flexGrow: 1, gap: 2, padding: spacing.md },
+  praise: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderWidth: 1 },
   kpiValue: { fontSize: 22, fontWeight: '700', fontVariant: ['tabular-nums'] },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
   tableRow: {

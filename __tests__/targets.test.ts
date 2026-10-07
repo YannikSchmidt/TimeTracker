@@ -1,4 +1,4 @@
-import { cleanTargets, compareJob, compareJobs, compareOrder, deltaPct, formatPct, orderKey, parseMinutes, sameOrder, stepTargetMs } from '../src/domain/targets';
+import { cleanTargets, compareJob, compareJobs, compareOrder, compareShare, deltaPct, formatPct, orderKey, parseMinutes, sameOrder, stepTargetMs, teamPraise } from '../src/domain/targets';
 import type { Article, Entry, Job } from '../src/domain/types';
 
 const MIN = 60_000;
@@ -101,5 +101,58 @@ describe('Mehrere Personen', () => {
     );
     expect(c.byStep.map((s) => s.step)).toEqual(['A', 'B']);
     expect(c).toMatchObject({ actualMs: 30 * MIN, targetMs: 30 * MIN, deltaPct: 0 });
+  });
+
+  it('Zusammenarbeit: Vorgabe im Verhältnis der geleisteten Zeit (8 h + 2 h, 15 h Vorgabe → 12 h + 3 h)', () => {
+    const v = article({ '': { setup: 15 * 60, perPiece: 0 } });
+    const parts = [
+      { job: job({ id: 'j' }), entries: [e('j', 8 * 60)] },
+      { job: job({ id: 'k', createdBy: 'max' }), entries: [e('k', 2 * 60)] },
+    ];
+    const anna = compareShare(parts, new Set(['j']), v, [], 0);
+    const max = compareShare(parts, new Set(['k']), v, [], 0);
+    expect(anna).toMatchObject({ actualMs: 8 * 60 * MIN, targetMs: 12 * 60 * MIN, deltaPct: -33 });
+    expect(max).toMatchObject({ actualMs: 2 * 60 * MIN, targetMs: 3 * 60 * MIN, deltaPct: -33 });
+    // allein am Auftrag: wie bisher
+    expect(compareShare([parts[0]], new Set(['j']), v, [], 0)).toEqual(compareOrder([parts[0]], v, [], 0));
+  });
+
+  it('Zusammenarbeit pro Schritt: jeder bekommt den Anteil des Schritts, an dem er gearbeitet hat', () => {
+    const b = article({ A: { setup: 10, perPiece: 0 }, B: { setup: 30, perPiece: 0 } });
+    const parts = [
+      { job: job({ id: 'j' }), entries: [{ ...e('j', 10), step: 'A' }, { ...e('j', 20), step: 'B' }] },
+      { job: job({ id: 'k' }), entries: [{ ...e('k', 20), step: 'B' }] },
+    ];
+    const c = compareShare(parts, new Set(['j']), b, ['A', 'B'], 0);
+    expect(c.byStep).toEqual([
+      { step: 'A', actualMs: 10 * MIN, targetMs: 10 * MIN },
+      { step: 'B', actualMs: 20 * MIN, targetMs: 15 * MIN },
+    ]);
+    expect(c).toMatchObject({ actualMs: 30 * MIN, targetMs: 25 * MIN });
+  });
+});
+
+describe('Team-Vergleich (nur positiv)', () => {
+  const people = [
+    { id: 'anna', actualMs: 80, targetMs: 100 },
+    { id: 'ben', actualMs: 90, targetMs: 100 },
+    { id: 'max', actualMs: 100, targetMs: 100 },
+    { id: 'eva', actualMs: 130, targetMs: 100 },
+  ];
+  it('lobt die Schnellsten, sagt den Langsameren nichts', () => {
+    expect(teamPraise('anna', people)).toMatch(/am schnellsten/);
+    expect(teamPraise('ben', people)).toMatch(/zu den Schnelleren/);
+    expect(teamPraise('max', people)).toBeNull();
+    expect(teamPraise('eva', people)).toBeNull();
+  });
+  it('kein Vergleich ohne andere oder ohne Vorgabe', () => {
+    expect(teamPraise('anna', people.slice(0, 1))).toBeNull();
+    expect(teamPraise('anna', [people[0], { id: 'ben', actualMs: 50, targetMs: 0 }])).toBeNull();
+    expect(teamPraise('nobody', people)).toBeNull();
+  });
+  it('Gleichstand: kein „am schnellsten“, bei allen gleich gar nichts', () => {
+    const tie = [{ id: 'anna', actualMs: 80, targetMs: 100 }, { id: 'ben', actualMs: 80, targetMs: 100 }, { id: 'eva', actualMs: 120, targetMs: 100 }];
+    expect(teamPraise('anna', tie)).toMatch(/zu den Schnelleren/);
+    expect(teamPraise('anna', tie.slice(0, 2))).toBeNull();
   });
 });

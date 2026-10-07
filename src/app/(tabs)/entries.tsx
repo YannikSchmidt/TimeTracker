@@ -2,18 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { format, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 
 import { JobRow } from '../../components/JobRow';
-import { OwnerFilterBar } from '../../components/OwnerFilterBar';
 import { Empty } from '../../components/ui';
 import { dailyTotals } from '../../domain/stats';
 import { dayKey, formatDuration } from '../../domain/time';
 import type { Job } from '../../domain/types';
 import { useArticles } from '../../hooks/useArticles';
 import { useNow } from '../../hooks/useNow';
-import { useWork, type OwnerFilter } from '../../hooks/useWork';
+import { useWork } from '../../hooks/useWork';
 import { spacing, usePalette } from '../../theme';
 
 export default function HistoryScreen() {
@@ -21,8 +20,8 @@ export default function HistoryScreen() {
   const work = useWork();
   const articles = useArticles();
   const now = useNow(30_000);
-  const [filter, setFilter] = useState<OwnerFilter>('me');
-  const view = work.view(filter);
+  // Datenschutz: Der Verlauf zeigt nur die eigenen Aufträge – Zeiten anderer sind nicht einsehbar.
+  const view = work.view('me');
 
   // Aufträge nach Tag des ersten Starts; Nacharbeit erscheint direkt unter ihrem Auftrag
   const sections = useMemo(() => {
@@ -70,11 +69,9 @@ export default function HistoryScreen() {
               entries={view.entriesOf.get(item.id) ?? []}
               article={item.articleId ? articles.byId.get(item.articleId) : undefined}
               now={now}
-              owner={filter === 'all' ? work.nameOf(work.ownerOf(item)) : null}
             />
           </View>
         )}
-        ListHeaderComponent={<OwnerFilterBar others={work.others} nameOf={work.nameOf} value={filter} onChange={setFilter} />}
         ListEmptyComponent={<Empty text={work.loaded ? 'Noch keine Aufträge. Starte im Timer-Tab oder trage Zeit nach.' : 'Lädt …'} />}
       />
       <Pressable

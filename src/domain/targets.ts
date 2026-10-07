@@ -70,6 +70,51 @@ export function compareOrder(parts: { job: Job; entries: Entry[] }[], article: A
   return { actualMs: total, targetMs, deltaPct: deltaPct(total, targetMs), byStep };
 }
 
+/**
+ * Eigener Anteil an einem gemeinsamen Auftrag: Die Vorgabe wird im Verhältnis der geleisteten Personenzeit
+ * aufgeteilt (je Schritt). Beispiel: 15 h Vorgabe, A arbeitet 8 h, B 2 h → A bekommt 12 h, B 3 h gutgeschrieben.
+ * Damit hat jede beteiligte Person dieselbe prozentuale Abweichung wie der Auftrag insgesamt.
+ * `own` = IDs der eigenen Timer; ohne weitere Beteiligte entspricht das Ergebnis compareOrder.
+ */
+export function compareShare(
+  parts: { job: Job; entries: Entry[] }[],
+  own: Set<string>,
+  article: Article | null | undefined,
+  steps: string[],
+  now: Millis,
+): Comparison {
+  const whole = compareOrder(parts, article, steps, now);
+  const mine = parts.filter((p) => own.has(p.job.id)).flatMap((p) => p.entries).filter((e) => !e.deletedAt);
+  const myTotal = mine.reduce((s, e) => s + entryMs(e, now, true), 0);
+  const myByStep = new Map(timeByStep(mine, steps, now, true).map((s) => [s.step, s.ms]));
+  const byStep = whole.byStep.map((s) => {
+    const actualMs = s.step === WHOLE_ORDER ? myTotal : (myByStep.get(s.step) ?? 0);
+    const share = s.actualMs > 0 ? actualMs / s.actualMs : 0;
+    return { step: s.step, actualMs, targetMs: s.targetMs === null ? null : Math.round(s.targetMs * share) };
+  });
+  const withTarget = byStep.filter((s) => s.targetMs !== null);
+  const targetMs = whole.targetMs === null ? null : withTarget.reduce((s, x) => s + x.targetMs!, 0);
+  return { actualMs: myTotal, targetMs, deltaPct: deltaPct(myTotal, targetMs), byStep };
+}
+
+/**
+ * Grober, nur positiver Team-Vergleich (Datenschutz): Wer am weitesten unter der Vorgabe liegt bzw. zur
+ * schnelleren Hälfte gehört, bekommt ein Lob. Alle anderen bekommen nichts angezeigt – niemand wird als langsam
+ * markiert, und keine fremden Zeiten werden genannt.
+ */
+export function teamPraise(me: string, people: { id: string; actualMs: Millis; targetMs: Millis }[]): string | null {
+  const ratios = people.filter((p) => p.targetMs > 0).map((p) => ({ id: p.id, ratio: p.actualMs / p.targetMs }));
+  const mine = ratios.find((r) => r.id === me);
+  if (!mine || ratios.length < 2) return null;
+  // Gleichstand (z.B. gemeinsamer Auftrag mit anteiliger Vorgabe) zählt weder als schneller noch als langsamer
+  const faster = ratios.filter((r) => r.ratio < mine.ratio - 0.001).length;
+  const slower = ratios.filter((r) => r.ratio > mine.ratio + 0.001).length;
+  if (!slower) return null;
+  if (faster === 0 && slower === ratios.length - 1) return 'Du warst in diesem Zeitraum am schnellsten im Team.';
+  if (faster < Math.floor(ratios.length / 2)) return 'Du gehörst in diesem Zeitraum zu den Schnelleren im Team.';
+  return null;
+}
+
 /** Timer am selben Auftrag: gleiche Auftragsnummer und gleicher Artikel (nur Aufträge, keine Nacharbeit). */
 export function sameOrder(a: Job, b: Job): boolean {
   return a.kind === 'order' && b.kind === 'order' && !!a.orderNo && a.orderNo === b.orderNo && a.articleId === b.articleId;

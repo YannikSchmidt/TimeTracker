@@ -26,7 +26,8 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
   Minuten. Die Kachel zeigt die Vorgabe, der Auftrag Ist/Vorgabe/Abweichung je Schritt, die Statistik den Vergleich je
   Untergruppe und Artikel (Gesamtgeräte und Fronten getrennt). Arbeits-/Fehlzeiten werden nicht ausgewertet (Stempeluhr).
 - **Mehrere Personen**: Personenzähler im Timer (Zeit zählt mal Personen, änderbar während der Timer läuft).
-  Starten mehrere Personen eigene Timer auf denselben Auftrag, zählt ihre Zeit zusammen gegen die Vorgabe.
+  Starten mehrere Personen eigene Timer auf denselben Auftrag, wird die Vorgabe im Verhältnis der geleisteten Zeit
+  aufgeteilt (z.B. 15 h Vorgabe, 8 h + 2 h gearbeitet → 12 h + 3 h gutgeschrieben).
 - **Vorschläge aus früheren Eingaben**: zuletzt verwendete Auftragsnummern, häufige Artikel, Stückzahl
   (häufigste des Artikels, sonst Standard 24 – einstellbar) und bisherige Nacharbeitsgründe.
 - **Nacharbeit**: eigener Timer zu einem Auftrag (offen oder abgeschlossen). Beim Beenden wird der Grund
@@ -41,9 +42,11 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
 - **Timer-Namen** aus Auftragsnummer und Benennung, z.B. „A-2026-0815 · Halter links“.
 - **Statistik** (Woche/Monat/Jahr): Zeit an Aufträgen, Ist gegen Vorgabe, Nacharbeit, Aufträge, Verteilung nach
   Artikel/Auftrag/Merkmal, Artikel & Stückzahlen, Nacharbeit nach Grund, Verlauf.
+- **Datenschutz**: Verlauf und Statistik zeigen nur die eigenen Zeiten. Mit dem Team gibt es nur einen groben,
+  positiven Vergleich („Du warst am schnellsten im Team“) – niemand wird als langsam angezeigt.
 - **Team-Sync** (Web-App): verschlüsselt (AES-256, Team-Passwort) über ein privates GitHub-Repo; persönlicher Token
-  pro Person, damit jede Änderung nachvollziehbar ist. Alle sehen alles (Filter *Ich / Person / Alle*),
-  bearbeiten aber nur ihre eigenen Aufträge. Offline nutzbar, Abgleich automatisch.
+  pro Person, damit jede Änderung nachvollziehbar ist. Jede Person sieht nur ihre eigenen Zeiten
+  und bearbeitet nur ihre eigenen Aufträge. Offline nutzbar, Abgleich automatisch.
 - **Löschen nur durch den Admin**: alle anderen schlagen Löschungen mit Begründung vor; der Admin entscheidet in den
   Einstellungen. Bestätigte Löschungen fremder Aufträge führt das Gerät der Besitzerin/des Besitzers aus.
 - **Kollegen einladen per QR-Code**: kein GitHub-Konto nötig – QR scannen, Name und Team-Passwort eingeben.

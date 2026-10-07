@@ -8,8 +8,8 @@ import { DimensionPicker } from '../../components/ValuePicker';
 import { DeleteAction } from '../../components/DeleteAction';
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData } from '../../data/DataProvider';
-import { entryMs, timeByStep } from '../../domain/flows';
-import { compareOrder, deltaPct, formatPct, sameOrder, WHOLE_ORDER } from '../../domain/targets';
+import { timeByStep } from '../../domain/flows';
+import { compareShare, deltaPct, formatPct, sameOrder, WHOLE_ORDER } from '../../domain/targets';
 import { jobName, jobTimes, reworkOf } from '../../domain/jobs';
 import { reworkReasons } from '../../domain/suggestions';
 import { formatClock, formatDuration, formatTime } from '../../domain/time';
@@ -102,7 +102,8 @@ export default function JobScreen() {
   // Andere Timer am selben Auftrag (z.B. Kollegen) zählen zusammen gegen die Vorgabe
   const partners = job && !isRework ? work.all.jobs.filter((j) => j.id !== job.id && !j.deletedAt && sameOrder(job, j)) : [];
   const parts = job ? [{ job, entries }, ...partners.map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [] }))] : [];
-  const cmp = job && !isRework ? compareOrder(parts, articleOf(job), flow.steps, now) : null;
+  // Vorgabe im Verhältnis der geleisteten Zeit aufgeteilt: hier der Anteil dieses Timers
+  const cmp = job && !isRework ? compareShare(parts, new Set([job.id]), articleOf(job), flow.steps, now) : null;
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
@@ -153,7 +154,7 @@ export default function JobScreen() {
         <Card style={{ gap: spacing.xs }}>
           <SectionTitle>
             {flow.steps.length ? `Arbeitsschritte${job.onlyStep ? ' (nur ein Schritt)' : ''}` : 'Vorgabe'}
-            {partners.length ? ' · alle Timer zusammen' : ''}
+            {partners.length ? ' · dein Anteil' : ''}
           </SectionTitle>
           <View style={styles.stepRow}>
             <Text style={[styles.th, { color: p.muted, flex: 1 }]}>{flow.steps.length ? 'Schritt' : ''}</Text>
@@ -198,19 +199,16 @@ export default function JobScreen() {
       {job && partners.length > 0 && (
         <Card style={{ gap: spacing.xs }}>
           <SectionTitle>Am Auftrag beteiligt</SectionTitle>
-          {parts.map(({ job: j, entries: es }) => (
-            <View key={j.id} style={styles.stepRow}>
-              <Text style={{ color: p.text, flex: 1, fontWeight: j.id === job.id ? '700' : '400' }} numberOfLines={1}>
-                {j.id === job.id ? 'Dieser Timer' : work.nameOf(j.createdBy)}
-                {(j.workers ?? 1) > 1 ? ` (${j.workers} Pers.)` : ''}
-                {j.status === 'running' ? ' · läuft' : j.status === 'paused' ? ' · pausiert' : ''}
-              </Text>
-              <Text style={[styles.num, { color: p.text }]}>
-                {formatDuration(es.filter((e) => !e.deletedAt).reduce((s, e) => s + entryMs(e, now, true), 0))}
-              </Text>
-            </View>
+          {parts.map(({ job: j }) => (
+            <Text key={j.id} style={{ color: p.text, fontWeight: j.id === job.id ? '700' : '400', paddingVertical: 2 }} numberOfLines={1}>
+              {j.id === job.id ? 'Dieser Timer' : work.nameOf(j.createdBy)}
+              {j.status === 'running' ? ' · läuft' : j.status === 'paused' ? ' · pausiert' : ' · fertig'}
+            </Text>
           ))}
-          <Text style={{ color: p.muted, fontSize: 12 }}>Personenzeit je Timer (Zeit × Personen). Die Vorgabe gilt für alle zusammen.</Text>
+          <Text style={{ color: p.muted, fontSize: 12 }}>
+            Die Vorgabe wird im Verhältnis der geleisteten Zeit aufgeteilt; oben steht dein Anteil. Zeiten anderer sind nicht
+            einsehbar.
+          </Text>
         </Card>
       )}
 
