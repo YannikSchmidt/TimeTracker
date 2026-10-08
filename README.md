@@ -26,8 +26,9 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
   Der Knopf **„Schritt“** neben Pause/Fertig wechselt jederzeit auf einen beliebigen Schritt – Auswahl aus dem Ablauf
   und den schon verwendeten Schritten des Artikels, oder einen neuen eingeben.
 - **Vorgabe gegen Ist**: Pro Artikel und Arbeitsschritt Rüstzeit (einmal pro Auftrag) und Einzelzeit (pro Stück) in
-  Minuten. Die Kachel zeigt die Vorgabe, der Auftrag Ist/Vorgabe/Abweichung je Schritt, die Statistik den Vergleich je
-  Untergruppe und Artikel (Gesamtgeräte und Fronten getrennt). Arbeits-/Fehlzeiten werden nicht ausgewertet (Stempeluhr).
+  Minuten. Die Kachel zeigt die Vorgabe, der Auftrag Ist/Soll/Bilanz je Schritt, die Statistik die Arbeitsbilanz,
+  jeden Auftrag einzeln (Ist- und Soll-Balken, Anteil bei Zusammenarbeit) und den Vergleich je Untergruppe und Artikel
+  (Gesamtgeräte und Fronten getrennt). **Bilanz = Soll − Ist**: + schneller, − länger als geplant. Arbeits-/Fehlzeiten werden nicht ausgewertet (Stempeluhr).
 - **Mehrere Personen**: Personenzähler im Timer (Zeit zählt mal Personen, änderbar während der Timer läuft).
   Starten mehrere Personen eigene Timer auf denselben Auftrag, wird die Vorgabe im Verhältnis der geleisteten Zeit
   aufgeteilt (z.B. 15 h Vorgabe, 8 h + 2 h gearbeitet → 12 h + 3 h gutgeschrieben).

@@ -11,7 +11,7 @@ import { UpdateBanner } from '../../components/UpdateBanner';
 import { Empty, SectionTitle } from '../../components/ui';
 import { stepChoices } from '../../domain/flows';
 import { jobName, reworkOf } from '../../domain/jobs';
-import { sameOrder } from '../../domain/targets';
+import { orderArticle, sameOrder } from '../../domain/targets';
 import { useArticles } from '../../hooks/useArticles';
 import { useGroups } from '../../hooks/useGroups';
 import { useJobActions } from '../../hooks/useJobActions';
@@ -96,6 +96,10 @@ export default function TimerScreen() {
               partners={work.all.jobs
                 .filter((j) => j.id !== job.id && !work.isOwn(j) && sameOrder(job, j))
                 .map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [], name: work.nameOf(j.createdBy) }))}
+              targetArticle={orderArticle(
+                [job, ...work.all.jobs.filter((j) => j.id !== job.id && !work.isOwn(j) && sameOrder(job, j))],
+                articles.byId,
+              )}
               now={now}
             />
           ))

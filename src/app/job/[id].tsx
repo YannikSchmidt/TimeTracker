@@ -9,7 +9,7 @@ import { DeleteAction } from '../../components/DeleteAction';
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData } from '../../data/DataProvider';
 import { timeByStep } from '../../domain/flows';
-import { compareShare, deltaPct, formatPct, sameOrder, WHOLE_ORDER } from '../../domain/targets';
+import { balanceMs, balancePct, compareShare, formatBalance, formatPct, orderArticle, sameOrder, WHOLE_ORDER } from '../../domain/targets';
 import { jobName, jobTimes, reworkOf } from '../../domain/jobs';
 import { reworkReasons } from '../../domain/suggestions';
 import { formatClock, formatDuration, formatTime } from '../../domain/time';
@@ -97,13 +97,15 @@ export default function JobScreen() {
   const parent = job?.parentJobId ? work.all.jobsById.get(job.parentJobId) : undefined;
   const isRework = job?.kind === 'rework';
   const articleOf = (j: { articleId: string | null }) => (j.articleId ? articles.byId.get(j.articleId) : undefined);
-  const flow = groups.flowOf(job?.articleId ? articles.byId.get(job.articleId) : undefined);
-  const stepTimes = job ? timeByStep(entries, flow.steps, now).filter((s) => s.step !== null || entries.some((e) => e.step)) : [];
   // Andere Timer am selben Auftrag (z.B. Kollegen) zählen zusammen gegen die Vorgabe
   const partners = job && !isRework ? work.all.jobs.filter((j) => j.id !== job.id && !j.deletedAt && sameOrder(job, j)) : [];
+  // Vorgabe vom eigenen Artikel, sonst vom Artikel eines Kollegen (z.B. doppelt angelegter Artikel)
+  const targetArticle = job ? orderArticle([job, ...partners], articles.byId) : undefined;
+  const flow = groups.flowOf((job?.articleId ? articles.byId.get(job.articleId) : undefined) ?? targetArticle);
+  const stepTimes = job ? timeByStep(entries, flow.steps, now).filter((s) => s.step !== null || entries.some((e) => e.step)) : [];
   const parts = job ? [{ job, entries }, ...partners.map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [] }))] : [];
   // Vorgabe im Verhältnis der geleisteten Zeit aufgeteilt: hier der Anteil dieses Timers
-  const cmp = job && !isRework ? compareShare(parts, new Set([job.id]), articleOf(job), flow.steps, now) : null;
+  const cmp = job && !isRework ? compareShare(parts, new Set([job.id]), targetArticle, flow.steps, now) : null;
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
@@ -120,8 +122,8 @@ export default function JobScreen() {
               <Stat
                 label="Vorgabe"
                 value={formatDuration(cmp.targetMs)}
-                hint={`Ist ${formatPct(cmp.deltaPct)}`}
-                color={(cmp.deltaPct ?? 0) > 0 ? p.danger : p.success}
+                hint={`Bilanz ${formatBalance(balanceMs(cmp.actualMs, cmp.targetMs))}`}
+                color={cmp.actualMs > cmp.targetMs ? p.danger : p.success}
               />
             ) : (
               <Stat label="Pausen" value={formatDuration(times.pausedMs)} />
@@ -159,15 +161,15 @@ export default function JobScreen() {
           <View style={styles.stepRow}>
             <Text style={[styles.th, { color: p.muted, flex: 1 }]}>{flow.steps.length ? 'Schritt' : ''}</Text>
             <Text style={[styles.th, styles.num, { color: p.muted }]}>Ist</Text>
-            <Text style={[styles.th, styles.num, { color: p.muted }]}>Vorgabe</Text>
-            <Text style={[styles.th, styles.num, { color: p.muted }]}>Abw.</Text>
+            <Text style={[styles.th, styles.num, { color: p.muted }]}>Soll</Text>
+            <Text style={[styles.th, styles.num, { color: p.muted }]}>Bilanz</Text>
           </View>
           {[
             ...cmp.byStep,
             ...stepTimes.filter((t) => !cmp.byStep.some((b) => b.step === (t.step ?? ''))).map((t) => ({ step: t.step ?? '', actualMs: t.ms, targetMs: null })),
           ].map((s) => {
             const current = s.step === job.currentStep && job.status !== 'done';
-            const pct = deltaPct(s.actualMs, s.targetMs);
+            const bal = s.targetMs === null ? null : balanceMs(s.actualMs, s.targetMs);
             return (
               <View key={s.step || '-'} style={styles.stepRow}>
                 <Text style={{ color: current ? p.primary : p.text, flex: 1, fontWeight: current ? '700' : '400' }} numberOfLines={1}>
@@ -176,7 +178,9 @@ export default function JobScreen() {
                 </Text>
                 <Text style={[styles.num, { color: p.text }]}>{formatDuration(s.actualMs)}</Text>
                 <Text style={[styles.num, { color: p.muted }]}>{s.targetMs === null ? '–' : formatDuration(s.targetMs)}</Text>
-                <Text style={[styles.num, { color: pct === null ? p.muted : pct > 0 ? p.danger : p.success, fontWeight: '600' }]}>{formatPct(pct)}</Text>
+                <Text style={[styles.num, { color: bal === null ? p.muted : bal < 0 ? p.danger : p.success, fontWeight: '600' }]}>
+                  {bal === null ? '–' : formatBalance(bal)}
+                </Text>
               </View>
             );
           })}
@@ -185,10 +189,23 @@ export default function JobScreen() {
               <Text style={{ color: p.text, flex: 1, fontWeight: '700' }}>Gesamt</Text>
               <Text style={[styles.num, { color: p.text, fontWeight: '700' }]}>{formatDuration(cmp.actualMs)}</Text>
               <Text style={[styles.num, { color: p.muted }]}>{cmp.targetMs === null ? '–' : formatDuration(cmp.targetMs)}</Text>
-              <Text style={[styles.num, { color: cmp.deltaPct === null ? p.muted : cmp.deltaPct > 0 ? p.danger : p.success, fontWeight: '700' }]}>
-                {formatPct(cmp.deltaPct)}
+              <Text style={[styles.num, { color: cmp.targetMs === null ? p.muted : cmp.actualMs > cmp.targetMs ? p.danger : p.success, fontWeight: '700' }]}>
+                {cmp.targetMs === null ? '–' : formatBalance(balanceMs(cmp.actualMs, cmp.targetMs))}
               </Text>
             </View>
+          )}
+          {cmp.targetMs !== null && (
+            <Text style={{ color: cmp.actualMs > cmp.targetMs ? p.danger : p.success, fontSize: 13, fontWeight: '600' }}>
+              {cmp.actualMs > cmp.targetMs
+                ? `${formatDuration(cmp.actualMs - cmp.targetMs)} länger als geplant (${formatPct(balancePct(cmp.deltaPct))})`
+                : `${formatDuration(cmp.targetMs - cmp.actualMs)} schneller als geplant (${formatPct(balancePct(cmp.deltaPct))})`}
+            </Text>
+          )}
+          {partners.length > 0 && cmp.share !== undefined && (
+            <Text style={{ color: p.muted, fontSize: 12 }}>
+              Dein Anteil an der Arbeitszeit: {Math.round(cmp.share * 100)} %
+              {cmp.orderTargetMs ? ` · Soll gesamt ${formatDuration(cmp.orderTargetMs)}, davon dein Anteil ${formatDuration(cmp.targetMs ?? 0)}` : ''}
+            </Text>
           )}
           {cmp.targetMs === null && (
             <Text style={{ color: p.muted, fontSize: 12 }}>Für diesen Artikel sind noch keine Vorgabezeiten hinterlegt (Artikel → Vorgabezeiten).</Text>
