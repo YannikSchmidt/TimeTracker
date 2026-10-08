@@ -208,6 +208,11 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       ALTER TABLE articles ADD COLUMN no_sections INTEGER NOT NULL DEFAULT 0;
     `);
   },
+
+  // v9: in der Schritt-Auswahl ausgeblendete Schritte je Artikel
+  async (db) => {
+    await db.execAsync(`ALTER TABLE articles ADD COLUMN hidden_steps TEXT NOT NULL DEFAULT '[]';`);
+  },
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

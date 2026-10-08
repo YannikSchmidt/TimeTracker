@@ -11,7 +11,7 @@ import { UpdateBanner } from '../../components/UpdateBanner';
 import { Empty, SectionTitle } from '../../components/ui';
 import { stepChoices } from '../../domain/flows';
 import { jobName, reworkOf } from '../../domain/jobs';
-import { orderArticle, sameOrder } from '../../domain/targets';
+import { hiddenStepsFor, orderArticle, sameOrder } from '../../domain/targets';
 import { useArticles } from '../../hooks/useArticles';
 import { useGroups } from '../../hooks/useGroups';
 import { useJobActions } from '../../hooks/useJobActions';
@@ -92,6 +92,8 @@ export default function TimerScreen() {
               stepChoices={stepChoices(
                 groups.flowOf(job.articleId ? articles.byId.get(job.articleId) : undefined, job.section ?? null).steps,
                 usedSteps.get(`${job.articleId ?? `job:${job.id}`}|${job.section === 'display' ? 'display' : ''}`) ?? [],
+                hiddenStepsFor(job.articleId ? articles.byId.get(job.articleId) : undefined, job.section),
+                job.currentStep,
               )}
               partners={work.all.jobs
                 .filter((j) => j.id !== job.id && !work.isOwn(j) && sameOrder(job, j))

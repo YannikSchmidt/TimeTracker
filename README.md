@@ -25,7 +25,9 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
   nächsten; die Zeit pro Schritt steht im Auftrag. Beim Start kann auch nur ein einzelner Schritt getrackt werden.
   Der Knopf **„Schritt“** neben Pause/Fertig wechselt jederzeit auf einen beliebigen Schritt – Auswahl aus dem Ablauf
   und den schon verwendeten Schritten des Artikels, oder einen neuen eingeben. Lief schon Zeit seit dem Start bzw. dem
-  letzten Wechsel, fragt die App, ob diese Zeit auch zum gewählten Schritt zählen soll.
+  letzten Wechsel, fragt die App, ob diese Zeit auch zum gewählten Schritt zählen soll. Über **„Bearbeiten“** in der
+  Auswahl lassen sich früher verwendete Schritte umbenennen oder entfernen; im Auftrag kann man bei jedem
+  Arbeitsabschnitt Zeit und Schritt korrigieren oder den Abschnitt löschen.
 - **Gesamtgeräte in zwei Teilen**: Nach dem Scan eines Gesamtgeräts fragt die App „Display-Verheiratung oder
   Gesamtmontage?“. Beide Teile sind eigenständige Aufträge mit eigenem Ablauf, eigenen Vorgabezeiten und eigenem
   Eintrag in der Statistik. Wer beides macht, startet nach „Fertig“ direkt mit „Weiter mit Gesamtmontage“ den anderen

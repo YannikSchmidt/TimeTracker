@@ -101,9 +101,16 @@ export function timeByStep(entries: Entry[], steps: string[], now: number, perso
 
 /**
  * Auswahl für den Schritt-Knopf: zuerst der Ablauf in Reihenfolge, danach weitere Schritte, die für den Artikel
- * schon verwendet wurden (häufigste zuerst). Groß-/Kleinschreibung zählt nicht doppelt.
+ * schon verwendet wurden (häufigste zuerst). Groß-/Kleinschreibung zählt nicht doppelt. Ausgeblendete Schritte
+ * (`hidden`) fehlen – außer dem aktuellen Schritt; Schritte aus dem Ablauf bleiben immer.
  */
-export function stepChoices(flowSteps: string[], used: (string | null | undefined)[]): string[] {
+export function stepChoices(
+  flowSteps: string[],
+  used: (string | null | undefined)[],
+  hidden: string[] = [],
+  current: string | null = null,
+): string[] {
+  const hide = new Set(hidden.map((h) => h.toLowerCase()));
   const counts = new Map<string, { name: string; n: number }>();
   for (const s of used) {
     const name = s?.trim();
@@ -115,8 +122,9 @@ export function stepChoices(flowSteps: string[], used: (string | null | undefine
   }
   const flow = cleanSteps(flowSteps);
   const inFlow = new Set(flow.map((s) => s.toLowerCase()));
+  if (current?.trim() && !counts.has(current.trim().toLowerCase())) counts.set(current.trim().toLowerCase(), { name: current.trim(), n: 0 });
   const extra = [...counts.entries()]
-    .filter(([key]) => !inFlow.has(key))
+    .filter(([key]) => !inFlow.has(key) && (!hide.has(key) || key === current?.trim().toLowerCase()))
     .sort((a, b) => b[1].n - a[1].n || a[1].name.localeCompare(b[1].name, 'de'))
     .map(([, c]) => c.name);
   return [...flow, ...extra];

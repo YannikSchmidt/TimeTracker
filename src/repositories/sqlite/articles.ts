@@ -14,6 +14,7 @@ interface ArticleRow {
   group_id: string | null;
   targets: string | null;
   no_sections: number | null;
+  hidden_steps: string | null;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
@@ -27,6 +28,7 @@ const toArticle = (r: ArticleRow): Article => ({
   groupId: r.group_id ?? null,
   targets: r.targets ? (JSON.parse(r.targets) as Article['targets']) : {},
   noSections: !!r.no_sections,
+  hiddenSteps: r.hidden_steps ? (JSON.parse(r.hidden_steps) as string[]) : [],
   createdAt: r.created_at,
   updatedAt: r.updated_at,
   deletedAt: r.deleted_at,
@@ -94,13 +96,14 @@ export class SqliteArticleRepository implements ArticleRepository {
     const other = number ? await this.findByNumber(number) : null;
     if (other && other.id !== id) throw duplicateArticleError(number);
     await this.db.runAsync(
-      'UPDATE articles SET number = ?, name = ?, device = ?, group_id = ?, targets = ?, no_sections = ?, updated_at = ? WHERE id = ?',
+      'UPDATE articles SET number = ?, name = ?, device = ?, group_id = ?, targets = ?, no_sections = ?, hidden_steps = ?, updated_at = ? WHERE id = ?',
       number,
       (input.name ?? current.name).trim(),
       (input.device ?? current.device).trim(),
       input.groupId === undefined ? current.groupId : input.groupId,
       JSON.stringify(input.targets === undefined ? current.targets : cleanTargets(input.targets)),
       (input.noSections === undefined ? current.noSections : input.noSections) ? 1 : 0,
+      JSON.stringify(input.hiddenSteps === undefined ? (current.hiddenSteps ?? []) : [...new Set(input.hiddenSteps)]),
       Date.now(),
       id,
     );

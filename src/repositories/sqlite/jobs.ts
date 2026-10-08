@@ -237,6 +237,24 @@ export class SqliteJobRepository implements JobRepository {
     });
   }
 
+  async renameStep(scope: { articleId: string | null; section: Job['section']; jobId: string }, from: string, to: string): Promise<void> {
+    const name = to.trim();
+    if (!name || name === from) return;
+    const now = Date.now();
+    const where = scope.articleId
+      ? `article_id = ? AND deleted_at IS NULL AND ${scope.section === 'display' ? "section = 'display'" : "(section IS NULL OR section <> 'display')"}`
+      : 'id = ?';
+    const key = scope.articleId ?? scope.jobId;
+    await this.db.withTransactionAsync(async () => {
+      await this.db.runAsync(
+        `UPDATE entries SET step = ?, updated_at = ? WHERE step = ? AND deleted_at IS NULL AND job_id IN (SELECT id FROM jobs WHERE ${where})`,
+        name, now, from, key,
+      );
+      await this.db.runAsync(`UPDATE jobs SET current_step = ?, updated_at = ? WHERE current_step = ? AND ${where}`, name, now, from, key);
+      await this.db.runAsync(`UPDATE jobs SET only_step = ?, updated_at = ? WHERE only_step = ? AND ${where}`, name, now, from, key);
+    });
+  }
+
   async setWorkers(id: string, n: number): Promise<void> {
     const job = await this.require(id);
     const workers = Math.min(20, Math.max(1, Math.round(n) || 1));

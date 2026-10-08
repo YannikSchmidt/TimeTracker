@@ -1,7 +1,7 @@
 import { DEFAULT_CODE_PATTERNS } from '../src/domain/codes';
-import { flowOf, hasSections, timeByStep, timeSinceStepChange } from '../src/domain/flows';
+import { flowOf, hasSections, stepChoices, timeByStep, timeSinceStepChange } from '../src/domain/flows';
 import { jobName } from '../src/domain/jobs';
-import { articleForSection, compareOrder, orderArticle, orderKey, sameOrder, targetKey } from '../src/domain/targets';
+import { articleForSection, compareOrder, hiddenStepsFor, orderArticle, orderKey, sameOrder, targetKey } from '../src/domain/targets';
 import type { Article, Job } from '../src/domain/types';
 import { createMemoryStore } from '../src/repositories/memory';
 
@@ -99,5 +99,48 @@ describe('Bisherige Zeit übernehmen (#15)', () => {
       { step: 'A', ms: 10 * MIN },
       { step: 'C', ms: 5 * MIN },
     ]);
+  });
+});
+
+describe('Arbeitsschritte bearbeiten (#18)', () => {
+  it('Auswahl: ausgeblendete Schritte fehlen – außer dem aktuellen; Ablaufschritte bleiben', () => {
+    expect(stepChoices(['Montage'], ['Kleebn', 'Test', 'Montage'], ['kleebn', 'Montage'])).toEqual(['Montage', 'Test']);
+    expect(stepChoices([], ['Kleebn'], ['Kleebn'], 'Kleebn')).toEqual(['Kleebn']);
+    expect(stepChoices([], [], [], 'Neu')).toEqual(['Neu']);
+    expect(hiddenStepsFor(art({ hiddenSteps: ['A', 'display:B'] }), 'display')).toEqual(['B']);
+    expect(hiddenStepsFor(art({ hiddenSteps: ['A', 'display:B'] }), null)).toEqual(['A']);
+  });
+
+  it('Schritt eines Abschnitts ändern; beim laufenden wechselt auch der Auftrag', async () => {
+    const s = store();
+    const j = await s.repos.jobs.start({ orderNo: '2600003', currentStep: 'A' });
+    s.tick(MIN);
+    await s.repos.jobs.nextStep(j.id, 'B');
+    s.tick(MIN);
+    const [first, running] = (await s.repos.entries.listAll()).filter((e) => e.jobId === j.id).sort((a, b) => a.startAt - b.startAt);
+    await s.repos.entries.update(first.id, { step: 'Prüfen' });
+    await s.repos.entries.update(running.id, { step: 'C' });
+    const after = await s.repos.entries.listAll();
+    expect(after.find((e) => e.id === first.id)?.step).toBe('Prüfen');
+    expect(after.find((e) => e.id === running.id)).toMatchObject({ step: 'C', endAt: null });
+    expect((await s.repos.jobs.get(j.id))?.currentStep).toBe('C');
+    await s.repos.entries.update(first.id, { step: null });
+    expect((await s.repos.entries.get(first.id))?.step).toBeNull();
+  });
+
+  it('Umbenennen: alle eigenen Aufträge dieses Artikels und Teils, andere nicht', async () => {
+    const s = store();
+    const a = await s.repos.articles.create({ number: '07111111', name: '', device: '' });
+    const j1 = await s.repos.jobs.start({ orderNo: '2600004', articleId: a.id, currentStep: 'Kleebn' });
+    await s.repos.jobs.finish(j1.id);
+    const j2 = await s.repos.jobs.start({ orderNo: '2600005', articleId: a.id, onlyStep: 'Kleebn' });
+    const d = await s.repos.jobs.start({ orderNo: '2600006', articleId: a.id, section: 'display', currentStep: 'Kleebn' });
+    await s.repos.jobs.renameStep({ articleId: a.id, section: null, jobId: j2.id }, 'Kleebn', 'Kleben');
+    const steps = async (id: string) => (await s.repos.entries.listAll()).filter((e) => e.jobId === id).map((e) => e.step);
+    expect(await steps(j1.id)).toEqual(['Kleben']);
+    expect(await s.repos.jobs.get(j2.id)).toMatchObject({ currentStep: 'Kleben', onlyStep: 'Kleben' });
+    expect(await steps(d.id)).toEqual(['Kleebn']); // Display-Teil unverändert
+    await s.repos.articles.update(a.id, { hiddenSteps: ['Kleebn'] });
+    expect((await s.repos.articles.get(a.id))?.hiddenSteps).toEqual(['Kleebn']);
   });
 });

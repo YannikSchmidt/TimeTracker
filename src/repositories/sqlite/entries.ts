@@ -59,14 +59,21 @@ export class SqliteEntryRepository implements EntryRepository {
     return row ? toEntry(row) : null;
   }
 
-  async update(id: string, input: { startAt?: Millis; endAt?: Millis | null }): Promise<void> {
+  async update(id: string, input: { startAt?: Millis; endAt?: Millis | null; step?: string | null }): Promise<void> {
     const current = await this.get(id);
     if (!current || current.deletedAt) throw notFound('Abschnitt');
     const startAt = input.startAt ?? current.startAt;
     const endAt = input.endAt === undefined ? current.endAt : input.endAt;
+    const step = input.step === undefined ? current.step : input.step?.trim() || null;
     validateTimes(startAt, endAt);
+    const now = Date.now();
     await this.db.withTransactionAsync(async () => {
-      await this.db.runAsync('UPDATE entries SET start_at = ?, end_at = ?, updated_at = ? WHERE id = ?', startAt, endAt, Date.now(), id);
+      await this.db.runAsync('UPDATE entries SET start_at = ?, end_at = ?, step = ?, updated_at = ? WHERE id = ?', startAt, endAt, step, now, id);
+      if (input.step !== undefined && endAt === null) {
+        // laufender Abschnitt: der Auftrag arbeitet ab jetzt in diesem Schritt weiter
+        await this.db.runAsync('UPDATE jobs SET current_step = ?, updated_at = ? WHERE id = ?', step, now, current.jobId);
+        if (step) await this.db.runAsync('UPDATE jobs SET only_step = ? WHERE id = ? AND only_step IS NOT NULL', step, current.jobId);
+      }
       await syncJobBounds(this.db, current.jobId);
     });
   }
