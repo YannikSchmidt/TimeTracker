@@ -32,6 +32,7 @@ export function JobCard({
   partners = [],
   steps = [],
   stepChoices = steps,
+  targetArticle = article,
   now,
 }: {
   job: Job;
@@ -45,6 +46,8 @@ export function JobCard({
   steps?: string[];
   /** Auswahl im Schritt-Knopf: Ablauf + für den Artikel schon verwendete Schritte */
   stepChoices?: string[];
+  /** Artikel mit den Vorgabezeiten (eigener, sonst der eines Kollegen am selben Auftrag) */
+  targetArticle?: Article;
   now: number;
 }) {
   const p = usePalette();
@@ -60,10 +63,10 @@ export function JobCard({
   const step = job.kind === 'order' ? job.currentStep : null;
   const stepIndex = step ? steps.indexOf(step) : -1;
   const next = !job.onlyStep && stepIndex >= 0 ? (steps[stepIndex + 1] ?? null) : null;
-  const cmp = job.kind === 'order' ? compareShare([{ job, entries }, ...partners], new Set([job.id]), article, steps, now) : null;
+  const cmp = job.kind === 'order' ? compareShare([{ job, entries }, ...partners], new Set([job.id]), targetArticle, steps, now) : null;
   const workers = job.workers ?? 1;
   const personMs = entries.filter((e) => !e.deletedAt).reduce((s, e) => s + entryMs(e, now, true), 0);
-  const stepTarget = step ? stepTargetMs(article, step, job.quantity) : null;
+  const stepTarget = step ? stepTargetMs(targetArticle, step, job.quantity) : null;
   const stepTime = step ? entries.filter((e) => e.step === step && !e.deletedAt).reduce((s, e) => s + ((e.endAt ?? now) - e.startAt), 0) : 0;
   const details = [...(article ? articleDetails(article) : []), job.quantity != null ? `${job.quantity} Stk` : '']
     .filter(Boolean)

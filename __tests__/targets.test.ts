@@ -1,4 +1,4 @@
-import { cleanTargets, compareJob, compareJobs, compareOrder, compareShare, deltaPct, formatPct, orderKey, parseMinutes, sameOrder, stepTargetMs, teamPraise } from '../src/domain/targets';
+import { cleanTargets, compareJob, compareJobs, compareOrder, compareShare, deltaPct, formatPct, orderKey, parseMinutes, sameOrder, stepTargetMs, teamPraise, balanceMs, formatBalance, orderArticle } from '../src/domain/targets';
 import type { Article, Entry, Job } from '../src/domain/types';
 
 const MIN = 60_000;
@@ -114,11 +114,11 @@ describe('Mehrere Personen', () => {
     expect(anna).toMatchObject({ actualMs: 8 * 60 * MIN, targetMs: 12 * 60 * MIN, deltaPct: -33 });
     expect(max).toMatchObject({ actualMs: 2 * 60 * MIN, targetMs: 3 * 60 * MIN, deltaPct: -33 });
     // allein am Auftrag: wie bisher
-    expect(compareShare([parts[0]], new Set(['j']), v, [], 0)).toEqual(compareOrder([parts[0]], v, [], 0));
+    expect(compareShare([parts[0]], new Set(['j']), v, [], 0)).toMatchObject(compareOrder([parts[0]], v, [], 0));
     // allein, mit Schritt, an dem noch nicht gearbeitet wurde: volle Vorgabe (wie compareOrder)
     const b = article({ A: { setup: 1, perPiece: 0 }, B: { setup: 2, perPiece: 0 } });
     const solo = [{ job: job({ id: 'j' }), entries: [{ ...e('j', 1), step: 'A' }] }];
-    expect(compareShare(solo, new Set(['j']), b, ['A', 'B'], 0)).toEqual(compareOrder(solo, b, ['A', 'B'], 0));
+    expect(compareShare(solo, new Set(['j']), b, ['A', 'B'], 0)).toMatchObject(compareOrder(solo, b, ['A', 'B'], 0));
   });
 
   it('Zusammenarbeit pro Schritt: jeder bekommt den Anteil des Schritts, an dem er gearbeitet hat', () => {
@@ -158,5 +158,42 @@ describe('Team-Vergleich (nur positiv)', () => {
     const tie = [{ id: 'anna', actualMs: 80, targetMs: 100 }, { id: 'ben', actualMs: 80, targetMs: 100 }, { id: 'eva', actualMs: 120, targetMs: 100 }];
     expect(teamPraise('anna', tie)).toMatch(/zu den Schnelleren/);
     expect(teamPraise('anna', tie.slice(0, 2))).toBeNull();
+  });
+});
+
+describe('Gemeinsamer Auftrag erkennen (Fehler „beide positiv, obwohl zusammen über Soll“)', () => {
+  const e = (jobId: string, minutes: number): Entry => ({ id: `s${n++}`, jobId, startAt: 0, endAt: minutes * MIN, step: null, ...meta });
+  it('gleiche Auftragsnummer reicht – auch wenn der Artikel doppelt angelegt wurde', () => {
+    expect(sameOrder(job({ id: 'j', articleId: 'a' }), job({ id: 'k', articleId: 'a2' }))).toBe(true);
+    expect(sameOrder(job({ id: 'j', orderNo: '2600001' }), job({ id: 'k', orderNo: '2600002' }))).toBe(false);
+  });
+
+  it('ohne Auftragsnummer: gleicher Artikel und gleichzeitig gearbeitet', () => {
+    const a = job({ id: 'j', orderNo: null, startedAt: 0, finishedAt: 100 });
+    expect(sameOrder(a, job({ id: 'k', orderNo: null, startedAt: 50, finishedAt: 200 }))).toBe(true);
+    expect(sameOrder(a, job({ id: 'k', orderNo: null, startedAt: 150, finishedAt: 200 }))).toBe(false);
+    expect(sameOrder(a, job({ id: 'k', orderNo: null, articleId: 'b', startedAt: 50, finishedAt: 200 }))).toBe(false);
+  });
+
+  it('beide zusammen über Soll → beide negative Bilanz (Vorgabe vom Artikel mit Vorgabezeiten)', () => {
+    const withTargets = article({ '': { setup: 0, perPiece: 45 } }); // 10 Stk → 7,5 h
+    const duplicate: Article = { ...article({}), id: 'a2' };
+    const byId = new Map([[withTargets.id, withTargets], [duplicate.id, duplicate]]);
+    const anna = job({ id: 'j', articleId: 'a2' });
+    const ben = job({ id: 'k', articleId: 'a' });
+    const parts = [
+      { job: anna, entries: [e('j', 6 * 60)] },
+      { job: ben, entries: [e('k', 4 * 60)] },
+    ];
+    const art = orderArticle([anna, ben], byId);
+    expect(art?.id).toBe('a');
+    const a = compareShare(parts, new Set(['j']), art, [], 0);
+    const b = compareShare(parts, new Set(['k']), art, [], 0);
+    expect(a).toMatchObject({ share: 0.6, targetMs: 4.5 * 60 * MIN, orderTargetMs: 7.5 * 60 * MIN });
+    expect(b).toMatchObject({ share: 0.4, targetMs: 3 * 60 * MIN });
+    expect(balanceMs(a.actualMs, a.targetMs!)).toBeLessThan(0);
+    expect(balanceMs(b.actualMs, b.targetMs!)).toBeLessThan(0);
+    expect(formatBalance(balanceMs(a.actualMs, a.targetMs!))).toBe('−1h 30m');
+    expect(formatBalance(30 * MIN)).toBe('+30m');
   });
 });

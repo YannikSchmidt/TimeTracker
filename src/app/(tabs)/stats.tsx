@@ -22,7 +22,19 @@ import {
   type BucketUnit,
   type PeriodKind,
 } from '../../domain/stats';
-import { compareJobs, compareShare, deltaPct, formatPct, orderKey, sameOrder, teamPraise, type ComparisonRow } from '../../domain/targets';
+import { jobName } from '../../domain/jobs';
+import {
+  balanceMs,
+  compareJobs,
+  compareShare,
+  formatBalance,
+  orderArticle,
+  orderKey,
+  sameOrder,
+  teamPraise,
+  type Comparison,
+  type ComparisonRow,
+} from '../../domain/targets';
 import { formatDuration } from '../../domain/time';
 import { DEFAULT_SETTINGS, type Job } from '../../domain/types';
 import { articleLabel, useArticles } from '../../hooks/useArticles';
@@ -81,11 +93,12 @@ export default function StatsScreen() {
     const shareOf = (mine: Job[]) => {
       const parts = work.all.jobs.filter((j) => j.kind === 'order' && (mine.some((o) => o.id === j.id) || mine.some((o) => sameOrder(o, j))));
       const job = { ...mine[0], quantity: Math.max(0, ...parts.map((j) => j.quantity ?? 0)) || mine[0].quantity };
-      const article = job.articleId ? articles.byId.get(job.articleId) : undefined;
-      const flow = groups.flowOf(article);
+      // Vorgabe vom eigenen Artikel, sonst vom Artikel eines Kollegen am selben Auftrag
+      const article = orderArticle([...mine, ...parts], articles.byId);
+      const flow = groups.flowOf((job.articleId ? articles.byId.get(job.articleId) : undefined) ?? article);
       const own = new Set(mine.map((j) => j.id));
       const comparison = compareShare(parts.map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [] })), own, article, flow.steps, now);
-      return { job, flow, comparison };
+      return { job, flow, comparison, shared: parts.some((j) => !own.has(j.id)), name: jobName(job, article ?? null) };
     };
     const byOrder = (jobs: Job[]) => {
       const map = new Map<string, Job[]>();
@@ -110,8 +123,14 @@ export default function StatsScreen() {
       : null;
     const flowOfJob = new Map(compared.map((c) => [c.job.id, c.flow]));
     const mainKey = (id: string) => flowOfJob.get(id)?.main ?? 'none';
+    // Einzelne Aufträge: Ist gegen Soll (bei Zusammenarbeit dein Anteil), neueste zuerst
+    const orders = compared
+      .filter((c) => c.comparison.targetMs !== null || c.shared)
+      .sort((a, b) => (b.job.finishedAt ?? 0) - (a.job.finishedAt ?? 0))
+      .map((c) => ({ key: c.job.id, name: c.name, shared: c.shared, comparison: c.comparison }));
     return {
       praise,
+      orders,
       kpis: computeKpis(entries, range, DEFAULT_SETTINGS, now),
       buckets: bucketTotals(entries, range, unit, now),
       vsMains: (['device', 'part', 'none'] as const).map((main) => {
@@ -143,7 +162,6 @@ export default function StatsScreen() {
   const allVs = stats.vsMains.map((m) => m.total).filter((t): t is NonNullable<typeof t> => !!t);
   const vsTarget = allVs.reduce((s, t) => s + t.targetMs, 0);
   const vsActual = allVs.reduce((s, t) => s + t.comparableMs, 0);
-  const vsPct = deltaPct(vsActual, vsTarget || null);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -170,10 +188,10 @@ export default function StatsScreen() {
           hint={kpis.reworkMs > 0 ? `davon Nacharbeit ${formatDuration(kpis.reworkMs)}` : undefined}
         />
         <Kpi
-          label="Ist gegen Vorgabe"
-          value={formatPct(vsPct)}
-          color={vsPct === null ? undefined : vsPct > 0 ? p.danger : p.success}
-          hint={vsTarget ? `Vorgabe ${formatDuration(vsTarget)} · Ist ${formatDuration(vsActual)}` : 'keine Vorgaben im Zeitraum'}
+          label="Arbeitsbilanz"
+          value={vsTarget ? formatBalance(balanceMs(vsActual, vsTarget)) : '–'}
+          color={!vsTarget ? undefined : vsActual > vsTarget ? p.danger : p.success}
+          hint={vsTarget ? `Soll ${formatDuration(vsTarget)} · Ist ${formatDuration(vsActual)}` : 'keine Vorgaben im Zeitraum'}
         />
         <Kpi label="Nacharbeit" value={formatDuration(kpis.reworkMs)} color={kpis.reworkMs > 0 ? p.warning : undefined} />
         <Kpi label="Aufträge" value={String(kpis.jobCount)} hint={`${allVs.reduce((s, t) => s + t.jobs, 0)} abgeschlossen`} />
@@ -189,6 +207,23 @@ export default function StatsScreen() {
       <Card>
         <BarChart data={stats.buckets} />
       </Card>
+
+      <Expandable title="Aufträge: Ist gegen Soll" icon="git-compare-outline" initiallyOpen>
+        {stats.orders.length === 0 ? (
+          <Empty text="Keine abgeschlossenen Aufträge mit Vorgabe in diesem Zeitraum." />
+        ) : (
+          <View style={{ gap: spacing.sm }}>
+            {stats.orders.slice(0, 30).map((o) => (
+              <OrderVs key={o.key} name={o.name} shared={o.shared} c={o.comparison} />
+            ))}
+            <Text style={{ color: p.muted, fontSize: 12 }}>
+              Ist = deine Arbeitszeit (Personenzeit). Soll = Vorgabe. Arbeiten mehrere am Auftrag, bekommst du die Vorgabe im
+              Verhältnis deiner Arbeitszeit: z.B. 6 von 10 Stunden = 60 % → 60 % der Vorgabe. Bilanz = Soll − Ist
+              (+ schneller, − länger als geplant).
+            </Text>
+          </View>
+        )}
+      </Expandable>
 
       <Expandable title="Vorgabe gegen Ist" icon="speedometer-outline" initiallyOpen>
         <Segmented
@@ -218,10 +253,9 @@ export default function StatsScreen() {
                 nameOf={(key) => (key === '-' ? 'ohne Artikel' : articles.byId.get(key) ? articleLabel(articles.byId.get(key)!) : 'gelöscht')}
               />
               <Text style={{ color: p.muted, fontSize: 12 }}>
-                Deine abgeschlossenen Aufträge im Zeitraum. Ist = Personenzeit (Timer lief × Personen). Arbeiten mehrere am
-                selben Auftrag, wird die Vorgabe im Verhältnis der geleisteten Zeit aufgeteilt – hier steht dein Anteil.
-                Abweichung nur über Aufträge mit Vorgabe; Min/Stk = Ist geteilt durch Stückzahl. Zeiten anderer sind nicht
-                einsehbar.
+                Deine abgeschlossenen Aufträge im Zeitraum. Ist = Personenzeit (Timer lief × Personen) der Aufträge mit Vorgabe,
+                Soll = Vorgabe (bei Zusammenarbeit dein Anteil), Bilanz = Soll − Ist: + schneller, − länger als geplant.
+                Min/Stk = Ist geteilt durch Stückzahl. Zeiten anderer sind nicht einsehbar.
               </Text>
             </View>
           );
@@ -367,7 +401,7 @@ function VsTable({ title, rows, nameOf }: { title: string; rows: ComparisonRow[]
       <Text style={[styles.th, { color: p.text, fontSize: 14 }]}>{title}</Text>
       <View style={[styles.tableRow, { borderBottomColor: p.border }]}>
         <Text style={[styles.th, { color: p.muted, flex: 1 }]} />
-        {['Ist', 'Vorgabe', 'Abw.', 'Min/Stk'].map((h) => (
+        {['Ist', 'Soll', 'Bilanz', 'Min/Stk'].map((h) => (
           <Text key={h} style={[styles.vsNum, styles.th, { color: p.muted }]}>
             {h}
           </Text>
@@ -379,13 +413,16 @@ function VsTable({ title, rows, nameOf }: { title: string; rows: ComparisonRow[]
             {nameOf(r.key)}
           </Text>
           <View style={styles.vsNums}>
-            <Text style={{ color: p.muted, fontSize: 12, flex: 1 }} numberOfLines={1}>
+            <Text style={{ color: p.muted, fontSize: 12, flex: 1 }} numberOfLines={2}>
               {r.jobs} Auftr.{r.pieces ? ` · ${r.pieces} Stk` : ''}
+              {r.actualMs > r.comparableMs ? ` · ${formatDuration(r.actualMs - r.comparableMs)} ohne Vorgabe` : ''}
             </Text>
-            <Text style={[styles.vsNum, { color: p.text }]}>{formatDuration(r.actualMs)}</Text>
-            <Text style={[styles.vsNum, { color: p.muted }]}>{r.targetMs ? formatDuration(r.targetMs) : '–'}</Text>
-            <Text style={[styles.vsNum, { color: r.deltaPct === null ? p.muted : r.deltaPct > 0 ? p.danger : p.success, fontWeight: '700' }]}>
-              {formatPct(r.deltaPct)}
+            <Text style={[styles.vsNum, { color: p.text }]}>{r.jobsWithTarget ? formatDuration(r.comparableMs) : formatDuration(r.actualMs)}</Text>
+            <Text style={[styles.vsNum, { color: p.muted }]}>{r.jobsWithTarget ? formatDuration(r.targetMs) : '–'}</Text>
+            <Text
+              style={[styles.vsNum, { color: !r.jobsWithTarget ? p.muted : r.comparableMs > r.targetMs ? p.danger : p.success, fontWeight: '700' }]}
+            >
+              {r.jobsWithTarget ? formatBalance(balanceMs(r.comparableMs, r.targetMs)) : '–'}
             </Text>
             <Text style={[styles.vsNum, { color: p.text }]}>
               {r.pieces ? (r.actualMs / r.pieces / 60_000).toLocaleString('de-DE', { maximumFractionDigits: 1 }) : '–'}
@@ -393,6 +430,47 @@ function VsTable({ title, rows, nameOf }: { title: string; rows: ComparisonRow[]
           </View>
         </View>
       ))}
+    </View>
+  );
+}
+
+/** Ein Auftrag: Ist und Soll als Balken, dazu Bilanz und – bei Zusammenarbeit – der eigene Anteil */
+function OrderVs({ name, shared, c }: { name: string; shared: boolean; c: Comparison }) {
+  const p = usePalette();
+  const target = c.targetMs;
+  const max = Math.max(c.actualMs, target ?? 0, 1);
+  const over = target !== null && c.actualMs > target;
+  return (
+    <View style={[styles.vsRow, { borderBottomColor: p.border, gap: 4 }]}>
+      <View style={styles.vsNums}>
+        <Text style={{ color: p.text, fontWeight: '600', flex: 1 }} numberOfLines={1}>
+          {name}
+        </Text>
+        <Text style={{ color: target === null ? p.muted : over ? p.danger : p.success, fontWeight: '700' }}>
+          {target === null ? 'keine Vorgabe' : `Bilanz ${formatBalance(balanceMs(c.actualMs, target))}`}
+        </Text>
+      </View>
+      {shared && c.share !== undefined && (
+        <Text style={{ color: p.muted, fontSize: 12 }}>
+          Dein Anteil an der Arbeitszeit: {Math.round(c.share * 100)} %
+          {c.orderTargetMs ? ` → ${Math.round(c.share * 100)} % von ${formatDuration(c.orderTargetMs)} Soll` : ''}
+        </Text>
+      )}
+      <BarLine label="Ist" ms={c.actualMs} max={max} color={over ? p.danger : p.primary} />
+      {target !== null && <BarLine label="Soll" ms={target} max={max} color={p.muted} />}
+    </View>
+  );
+}
+
+function BarLine({ label, ms, max, color }: { label: string; ms: number; max: number; color: string }) {
+  const p = usePalette();
+  return (
+    <View style={styles.barLine}>
+      <Text style={{ color: p.muted, fontSize: 12, width: 34 }}>{label}</Text>
+      <View style={[styles.barTrack, { backgroundColor: p.track }]}>
+        <View style={{ width: `${Math.max(2, (ms / max) * 100)}%`, height: '100%', backgroundColor: color, borderRadius: 4 }} />
+      </View>
+      <Text style={{ color: p.text, fontSize: 12, width: 64, textAlign: 'right', fontVariant: ['tabular-nums'] }}>{formatDuration(ms)}</Text>
     </View>
   );
 }
@@ -440,6 +518,8 @@ const styles = StyleSheet.create({
   colNum: { width: 62, textAlign: 'right', fontVariant: ['tabular-nums'] },
   vsRow: { paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, gap: 2 },
   vsNums: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  barLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  barTrack: { flex: 1, height: 10, borderRadius: 4, overflow: 'hidden' },
   vsNum: { width: 58, textAlign: 'right', fontVariant: ['tabular-nums'], fontSize: 13 },
   row: {
     flexDirection: 'row',

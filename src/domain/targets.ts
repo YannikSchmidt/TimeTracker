@@ -1,4 +1,5 @@
 import { entryMs, timeByStep } from './flows';
+import { formatDuration } from './time';
 import type { Article, Entry, Job, Millis } from './types';
 
 /** Vorgabe eines Arbeitsschritts in Minuten: Rüstzeit (einmal pro Auftrag) + Einzelzeit (pro Stück). */
@@ -32,6 +33,10 @@ export interface Comparison {
   /** Abweichung in Prozent der Vorgabe (+ = länger gebraucht) */
   deltaPct: number | null;
   byStep: { step: string; actualMs: Millis; targetMs: Millis | null }[];
+  /** nur bei compareShare: eigener Anteil an der Arbeitszeit aller Beteiligten (0–1) */
+  share?: number;
+  /** nur bei compareShare: Vorgabe des ganzen Auftrags (alle zusammen) */
+  orderTargetMs?: Millis | null;
 }
 
 export function deltaPct(actualMs: Millis, targetMs: Millis | null): number | null {
@@ -102,7 +107,7 @@ export function compareShare(
   });
   const withTarget = byStep.filter((s) => s.targetMs !== null);
   const targetMs = whole.targetMs === null ? null : withTarget.reduce((s, x) => s + x.targetMs!, 0);
-  return { actualMs: myTotal, targetMs, deltaPct: deltaPct(myTotal, targetMs), byStep };
+  return { actualMs: myTotal, targetMs, deltaPct: deltaPct(myTotal, targetMs), byStep, share: overall, orderTargetMs: whole.targetMs };
 }
 
 /**
@@ -123,14 +128,48 @@ export function teamPraise(me: string, people: { id: string; actualMs: Millis; t
   return null;
 }
 
-/** Timer am selben Auftrag: gleiche Auftragsnummer und gleicher Artikel (nur Aufträge, keine Nacharbeit). */
+/**
+ * Timer am selben Auftrag (nur Aufträge, keine Nacharbeit): gleiche Auftragsnummer – die Nummer ist eindeutig, auch
+ * wenn der Artikel auf zwei Geräten doppelt angelegt wurde. Ohne Auftragsnummer: gleicher Artikel und Zeiträume, die
+ * sich überschneiden (gleichzeitig daran gearbeitet).
+ */
 export function sameOrder(a: Job, b: Job): boolean {
-  return a.kind === 'order' && b.kind === 'order' && !!a.orderNo && a.orderNo === b.orderNo && a.articleId === b.articleId;
+  if (a.kind !== 'order' || b.kind !== 'order' || a.id === b.id) return false;
+  if (a.orderNo && b.orderNo) return a.orderNo === b.orderNo;
+  if (!a.articleId || a.articleId !== b.articleId) return false;
+  const end = (j: Job) => j.finishedAt ?? Number.MAX_SAFE_INTEGER;
+  return a.startedAt < end(b) && b.startedAt < end(a);
+}
+
+/** Artikel für den Vorgabe-Vergleich eines gemeinsamen Auftrags: der eigene, sonst der erste mit Vorgabezeiten. */
+export function orderArticle(jobs: Job[], byId: Map<string, Article>): Article | undefined {
+  const all = jobs.map((j) => (j.articleId ? byId.get(j.articleId) : undefined)).filter((a): a is Article => !!a);
+  const hasTargets = (a: Article) => Object.keys(a.targets ?? {}).length > 0;
+  return all[0] && hasTargets(all[0]) ? all[0] : (all.find(hasTargets) ?? all[0]);
 }
 
 /** Schlüssel zum Zusammenfassen mehrerer Timer eines Auftrags */
 export function orderKey(job: Job): string {
   return job.orderNo ? `${job.orderNo}|${job.articleId ?? ''}` : `job:${job.id}`;
+}
+
+/**
+ * Arbeitsbilanz = Vorgabe − Ist: positiv = schneller als geplant (Zeit gut), negativ = länger gebraucht.
+ * So zeigt „+“ immer etwas Gutes, „−“ eine Überschreitung.
+ */
+export function balanceMs(actualMs: Millis, targetMs: Millis): Millis {
+  return targetMs - actualMs;
+}
+
+/** „+1h 30m“ / „−45m“ (Bilanz in Zeit) */
+export function formatBalance(ms: Millis): string {
+  const rounded = Math.round(ms / 60_000) * 60_000;
+  return `${rounded > 0 ? '+' : rounded < 0 ? '−' : '±'}${formatDuration(Math.abs(rounded))}`;
+}
+
+/** Bilanz in Prozent der Vorgabe (+ = schneller) aus der Abweichung (+ = länger) */
+export function balancePct(delta: number | null): number | null {
+  return delta === null ? null : -delta;
 }
 
 /** „+12 %“ / „−5 %“ */
