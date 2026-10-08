@@ -34,7 +34,7 @@ export default function TimerScreen() {
   const usedSteps = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const j of work.all.jobs) {
-      const key = j.articleId ?? `job:${j.id}`;
+      const key = `${j.articleId ?? `job:${j.id}`}|${j.section === 'display' ? 'display' : ''}`;
       const list = map.get(key) ?? [];
       list.push(...(work.all.entriesOf.get(j.id) ?? []).filter((e) => !e.deletedAt && e.step).map((e) => e.step!));
       if (j.currentStep) list.push(j.currentStep);
@@ -88,10 +88,10 @@ export default function TimerScreen() {
               entries={work.entriesOf.get(job.id) ?? []}
               article={job.articleId ? articles.byId.get(job.articleId) : undefined}
               reworks={reworks.map((r) => ({ job: r, entries: work.entriesOf.get(r.id) ?? [] }))}
-              steps={groups.flowOf(job.articleId ? articles.byId.get(job.articleId) : undefined).steps}
+              steps={groups.flowOf(job.articleId ? articles.byId.get(job.articleId) : undefined, job.section ?? null).steps}
               stepChoices={stepChoices(
-                groups.flowOf(job.articleId ? articles.byId.get(job.articleId) : undefined).steps,
-                usedSteps.get(job.articleId ?? `job:${job.id}`) ?? [],
+                groups.flowOf(job.articleId ? articles.byId.get(job.articleId) : undefined, job.section ?? null).steps,
+                usedSteps.get(`${job.articleId ?? `job:${job.id}`}|${job.section === 'display' ? 'display' : ''}`) ?? [],
               )}
               partners={work.all.jobs
                 .filter((j) => j.id !== job.id && !work.isOwn(j) && sameOrder(job, j))

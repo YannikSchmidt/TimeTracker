@@ -22,6 +22,7 @@ import {
   type BucketUnit,
   type PeriodKind,
 } from '../../domain/stats';
+import { sectionOf } from '../../domain/flows';
 import { jobName } from '../../domain/jobs';
 import {
   balanceMs,
@@ -73,7 +74,8 @@ export default function StatsScreen() {
 
   const work = useWork();
   const groups = useGroups();
-  const [vsMain, setVsMain] = useState<'device' | 'part' | 'none'>('device');
+  // null = automatisch der erste Bereich mit Aufträgen
+  const [vsChoice, setVsMain] = useState<VsKey | null>(null);
   // Datenschutz: Die Statistik zeigt nur die eigenen Zeiten; mit dem Team gibt es nur einen groben, positiven Vergleich.
   const view = work.view('me');
   const entries = view.segments;
@@ -95,7 +97,7 @@ export default function StatsScreen() {
       const job = { ...mine[0], quantity: Math.max(0, ...parts.map((j) => j.quantity ?? 0)) || mine[0].quantity };
       // Vorgabe vom eigenen Artikel, sonst vom Artikel eines Kollegen am selben Auftrag
       const article = orderArticle([...mine, ...parts], articles.byId);
-      const flow = groups.flowOf((job.articleId ? articles.byId.get(job.articleId) : undefined) ?? article);
+      const flow = groups.flowOf((job.articleId ? articles.byId.get(job.articleId) : undefined) ?? article, job.section ?? null);
       const own = new Set(mine.map((j) => j.id));
       const comparison = compareShare(parts.map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [] })), own, article, flow.steps, now);
       return { job, flow, comparison, shared: parts.some((j) => !own.has(j.id)), name: jobName(job, article ?? null) };
@@ -122,7 +124,12 @@ export default function StatsScreen() {
         )
       : null;
     const flowOfJob = new Map(compared.map((c) => [c.job.id, c.flow]));
-    const mainKey = (id: string) => flowOfJob.get(id)?.main ?? 'none';
+    // Gesamtgeräte getrennt nach Display-Verheiratung und Gesamtmontage (ohne Angabe = Gesamtmontage)
+    const sectionOfJob = new Map(compared.map((c) => [c.job.id, sectionOf(c.job)]));
+    const mainKey = (id: string): VsKey => {
+      const main = flowOfJob.get(id)?.main ?? 'none';
+      return main === 'device' ? (sectionOfJob.get(id) ?? 'assembly') : main;
+    };
     // Einzelne Aufträge: Ist gegen Soll (bei Zusammenarbeit dein Anteil), neueste zuerst
     const orders = compared
       .filter((c) => c.comparison.targetMs !== null || c.shared)
@@ -133,7 +140,7 @@ export default function StatsScreen() {
       orders,
       kpis: computeKpis(entries, range, DEFAULT_SETTINGS, now),
       buckets: bucketTotals(entries, range, unit, now),
-      vsMains: (['device', 'part', 'none'] as const).map((main) => {
+      vsMains: (['display', 'assembly', 'part', 'none'] as const).map((main) => {
         const items = compared.filter((c) => mainKey(c.job.id) === main);
         return {
           main,
@@ -159,6 +166,7 @@ export default function StatsScreen() {
   }, [entries, range, kind, now, dimension, dims.values, group, articles, view.jobs, work, groups]);
 
   const { kpis } = stats;
+  const vsMain: VsKey = vsChoice ?? stats.vsMains.find((m) => m.total)?.main ?? 'display';
   const allVs = stats.vsMains.map((m) => m.total).filter((t): t is NonNullable<typeof t> => !!t);
   const vsTarget = allVs.reduce((s, t) => s + t.targetMs, 0);
   const vsActual = allVs.reduce((s, t) => s + t.comparableMs, 0);
@@ -228,7 +236,8 @@ export default function StatsScreen() {
       <Expandable title="Vorgabe gegen Ist" icon="speedometer-outline" initiallyOpen>
         <Segmented
           options={[
-            { value: 'device', label: 'Gesamtgeräte' },
+            { value: 'display', label: 'Display' },
+            { value: 'assembly', label: 'Gesamtmont.' },
             { value: 'part', label: 'Fronten' },
             { value: 'none', label: 'Sonstige' },
           ]}
@@ -376,6 +385,9 @@ export default function StatsScreen() {
 }
 
 const MAX_SHARES = 8;
+
+/** Bereiche im Vergleich Vorgabe gegen Ist: Gesamtgeräte nach Teil getrennt, dazu Fronten und Sonstige */
+type VsKey = 'display' | 'assembly' | 'part' | 'none';
 
 /** Gruppen-Summen → Diagrammdaten; ab dem 9. Eintrag als „Weitere“ zusammengefasst. */
 function keyShares(totals: { key: string | null; ms: number }[], nameOf: (key: string) => string, noneName: string): ShareDatum[] {

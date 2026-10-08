@@ -1,5 +1,5 @@
 import { classifyCode, type CodePatterns } from './codes';
-import type { Article, Entry, MainGroup, ProductGroup } from './types';
+import type { Article, Entry, Job, MainGroup, ProductGroup, Section } from './types';
 
 /** Feste IDs der Hauptgruppen (gleich auf allen Geräten) */
 export const MAIN_GROUP_ID: Record<MainGroup, string> = { device: 'grp-device', part: 'grp-part' };
@@ -32,6 +32,20 @@ export function mainGroupOf(article: Article, groupsById: Map<string, ProductGro
   return kind === 'device' || kind === 'part' ? kind : null;
 }
 
+/** Teile eines Gesamtgeräte-Auftrags */
+export const SECTION_LABEL: Record<Section, string> = { display: 'Display-Verheiratung', assembly: 'Gesamtmontage' };
+export const SECTION_SHORT: Record<Section, string> = { display: 'Display', assembly: 'Gesamtmontage' };
+
+/** Teil eines Auftrags für Vergleiche: ohne Angabe zählt er wie Gesamtmontage (bisheriger Ablauf). */
+export function sectionOf(job: Pick<Job, 'section'>): Section {
+  return job.section === 'display' ? 'display' : 'assembly';
+}
+
+/** Gesamtgerät, das in Display-Verheiratung und Gesamtmontage aufgeteilt wird (Abfrage beim Start). */
+export function hasSections(article: Article | null | undefined, groupsById: Map<string, ProductGroup>, patterns: CodePatterns): boolean {
+  return !!article && !article.noSections && mainGroupOf(article, groupsById, patterns) === 'device';
+}
+
 export interface Flow {
   main: MainGroup | null;
   /** Untergruppe (falls zugeordnet) */
@@ -40,14 +54,23 @@ export interface Flow {
   steps: string[];
 }
 
-/** Ablauf eines Artikels: der Untergruppe, sonst der Hauptgruppe. */
-export function flowOf(article: Article | null | undefined, groupsById: Map<string, ProductGroup>, patterns: CodePatterns): Flow {
+/**
+ * Ablauf eines Artikels: der Untergruppe, sonst der Hauptgruppe. Bei Gesamtgeräten hat jeder Teil einen eigenen
+ * Ablauf: `display` = Display-Verheiratung, sonst Gesamtmontage (bisheriger Ablauf).
+ */
+export function flowOf(
+  article: Article | null | undefined,
+  groupsById: Map<string, ProductGroup>,
+  patterns: CodePatterns,
+  section: Section | null = null,
+): Flow {
   if (!article) return { main: null, subgroup: null, steps: [] };
   const main = mainGroupOf(article, groupsById, patterns);
   const g = article.groupId ? groupsById.get(article.groupId) : undefined;
   const subgroup = g && g.parentId && !g.deletedAt ? g : null;
   const mainGroup = main ? groupsById.get(MAIN_GROUP_ID[main]) : undefined;
-  const steps = subgroup?.steps.length ? subgroup.steps : (mainGroup?.steps ?? []);
+  const pick = (x: ProductGroup | null | undefined) => (section === 'display' && main === 'device' ? (x?.displaySteps ?? []) : (x?.steps ?? []));
+  const steps = pick(subgroup).length ? pick(subgroup) : pick(mainGroup);
   return { main, subgroup, steps: steps.filter((s) => s.trim()) };
 }
 
@@ -97,6 +120,21 @@ export function stepChoices(flowSteps: string[], used: (string | null | undefine
     .sort((a, b) => b[1].n - a[1].n || a[1].name.localeCompare(b[1].name, 'de'))
     .map(([, c]) => c.name);
   return [...flow, ...extra];
+}
+
+/**
+ * Zeit seit dem letzten Schrittwechsel bzw. seit dem Start: die letzten zusammenhängenden Abschnitte mit dem
+ * aktuellen Schritt (null = ohne Schritt). Genau diese Zeit kann beim Schrittwechsel übernommen werden.
+ */
+export function timeSinceStepChange(entries: Entry[], currentStep: string | null, now: number): { ms: number; since: number | null } {
+  const own = entries.filter((e) => !e.deletedAt).sort((a, b) => a.startAt - b.startAt);
+  let ms = 0;
+  let since: number | null = null;
+  for (let i = own.length - 1; i >= 0 && (own[i].step ?? null) === (currentStep ?? null); i--) {
+    ms += entryMs(own[i], now);
+    since = own[i].startAt;
+  }
+  return { ms, since };
 }
 
 /** Schritte bereinigen: getrimmt, ohne leere und doppelte */

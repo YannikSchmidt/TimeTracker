@@ -13,6 +13,7 @@ interface GroupRow {
   name: string;
   parent_id: string | null;
   steps: string;
+  display_steps: string | null;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
@@ -24,6 +25,7 @@ const toGroup = (r: GroupRow): ProductGroup => ({
   name: r.name,
   parentId: r.parent_id,
   steps: JSON.parse(r.steps) as string[],
+  displaySteps: r.display_steps ? (JSON.parse(r.display_steps) as string[]) : [],
   createdAt: r.created_at,
   updatedAt: r.updated_at,
   deletedAt: r.deleted_at,
@@ -38,7 +40,7 @@ export class SqliteGroupRepository implements GroupRepository {
     return rows.map(toGroup);
   }
 
-  async create(input: { main: MainGroup; name: string; parentId: string; steps?: string[] }): Promise<ProductGroup> {
+  async create(input: { main: MainGroup; name: string; parentId: string; steps?: string[]; displaySteps?: string[] }): Promise<ProductGroup> {
     const name = input.name.trim();
     if (!name) throw new Error('Bitte einen Namen für die Untergruppe angeben.');
     const dup = await this.db.getFirstAsync<GroupRow>(
@@ -50,21 +52,30 @@ export class SqliteGroupRepository implements GroupRepository {
     const now = Date.now();
     const group: ProductGroup = {
       id: newId(), main: input.main, name, parentId: input.parentId, steps: cleanSteps(input.steps ?? []),
+      displaySteps: cleanSteps(input.displaySteps ?? []),
       createdAt: now, updatedAt: now, deletedAt: null,
     };
     await this.db.runAsync(
-      'INSERT INTO product_groups (id, main, name, parent_id, steps, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      group.id, group.main, group.name, group.parentId, JSON.stringify(group.steps), now, now,
+      'INSERT INTO product_groups (id, main, name, parent_id, steps, display_steps, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      group.id, group.main, group.name, group.parentId, JSON.stringify(group.steps), JSON.stringify(group.displaySteps), now, now,
     );
     return group;
   }
 
-  async update(id: string, input: { name?: string; steps?: string[] }): Promise<void> {
+  async update(id: string, input: { name?: string; steps?: string[]; displaySteps?: string[] }): Promise<void> {
     const row = await this.db.getFirstAsync<GroupRow>('SELECT * FROM product_groups WHERE id = ? AND deleted_at IS NULL', id);
     if (!row) throw notFound('Gruppe');
     const g = toGroup(row);
     const name = input.name?.trim() || g.name;
     const steps = input.steps !== undefined ? cleanSteps(input.steps) : g.steps;
-    await this.db.runAsync('UPDATE product_groups SET name = ?, steps = ?, updated_at = ? WHERE id = ?', name, JSON.stringify(steps), Date.now(), id);
+    const displaySteps = input.displaySteps !== undefined ? cleanSteps(input.displaySteps) : (g.displaySteps ?? []);
+    await this.db.runAsync(
+      'UPDATE product_groups SET name = ?, steps = ?, display_steps = ?, updated_at = ? WHERE id = ?',
+      name,
+      JSON.stringify(steps),
+      JSON.stringify(displaySteps),
+      Date.now(),
+      id,
+    );
   }
 }

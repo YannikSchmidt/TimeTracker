@@ -122,6 +122,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
       currentStep: input.onlyStep ?? input.currentStep ?? null,
       onlyStep: input.onlyStep ?? null,
       workers: clampWorkers(input.workers ?? 1),
+      section: input.section ?? null,
       createdAt: t,
       updatedAt: t,
       deletedAt: null,
@@ -176,6 +177,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         const t = now();
         const group: ProductGroup = {
           id: makeId(), main: input.main, name, parentId: input.parentId, steps: cleanSteps(input.steps ?? []),
+          displaySteps: cleanSteps(input.displaySteps ?? []),
           createdAt: t, updatedAt: t, deletedAt: null,
         };
         groups.push(group);
@@ -188,6 +190,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         Object.assign(g, {
           ...(input.name !== undefined && input.name.trim() ? { name: input.name.trim() } : {}),
           ...(input.steps !== undefined ? { steps: cleanSteps(input.steps) } : {}),
+          ...(input.displaySteps !== undefined ? { displaySteps: cleanSteps(input.displaySteps) } : {}),
           updatedAt: now(),
         });
         changed();
@@ -239,6 +242,16 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
           openEntry(id, t, next, j.workers ?? 1);
           j.status = 'running';
         }
+        changed();
+      },
+      async relabelStep(id, step) {
+        const j = findJob(id);
+        const t = now();
+        const from = j.currentStep ?? null;
+        const own = entries.filter((e) => e.jobId === id && !e.deletedAt).sort((a, b) => a.startAt - b.startAt);
+        for (let i = own.length - 1; i >= 0 && (own[i].step ?? null) === from; i--) Object.assign(own[i], { step, updatedAt: t });
+        Object.assign(j, { currentStep: step, updatedAt: t });
+        if (j.onlyStep) j.onlyStep = step;
         changed();
       },
       async setWorkers(id, n) {
@@ -399,6 +412,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         const t = now();
         const article: Article = {
           id: makeId(), number, name: input.name.trim(), device: input.device.trim(), groupId: input.groupId ?? null, targets: cleanTargets(input.targets ?? {}),
+          ...(input.noSections ? { noSections: true } : {}),
           createdAt: t, updatedAt: t, deletedAt: null, updatedBy: owner(),
         };
         articles.push(article);
@@ -417,6 +431,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
           device: (input.device ?? a.device).trim(),
           groupId: input.groupId === undefined ? a.groupId : input.groupId,
           targets: input.targets === undefined ? a.targets : cleanTargets(input.targets),
+          noSections: input.noSections === undefined ? (a.noSections ?? false) : input.noSections,
           updatedAt: now(),
           updatedBy: owner(),
         });
@@ -519,7 +534,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
 }
 
 function copyJob(j: Job): Job {
-  return { ...j, valueIds: [...(j.valueIds ?? [])], createdBy: j.createdBy ?? null, currentStep: j.currentStep ?? null, onlyStep: j.onlyStep ?? null };
+  return { ...j, valueIds: [...(j.valueIds ?? [])], createdBy: j.createdBy ?? null, currentStep: j.currentStep ?? null, onlyStep: j.onlyStep ?? null, section: j.section ?? null };
 }
 
 /** Personenzähler: 1 bis 20 */
@@ -528,7 +543,7 @@ function clampWorkers(n: number): number {
 }
 
 function copyGroup(g: ProductGroup): ProductGroup {
-  return { ...g, steps: [...g.steps] };
+  return { ...g, steps: [...g.steps], displaySteps: [...(g.displaySteps ?? [])] };
 }
 
 

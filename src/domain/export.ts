@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 
-import { entryMs } from './flows';
+import { entryMs, SECTION_LABEL } from './flows';
 import { jobTimes } from './jobs';
 import { toHours } from './time';
 import type { Article, Dimension, DimensionValue, Entry, Job } from './types';
@@ -37,6 +37,7 @@ export function jobsToCsv(
     'Artikelnummer',
     'Artikelbenennung',
     'Endgerät',
+    'Teil',
     'Stückzahl',
     'Arbeitszeit (h)',
     'Personenzeit (h)',
@@ -79,6 +80,7 @@ export function jobsToCsv(
         article?.number ?? '',
         article?.name ?? '',
         article?.device ?? '',
+        j.kind === 'order' && j.section ? SECTION_LABEL[j.section] : '',
         j.quantity == null ? '' : String(j.quantity),
         hours(t.workMs),
         hours(entries.filter((e) => e.jobId === j.id && !e.deletedAt).reduce((s, e) => s + entryMs(e, now, true), 0)),

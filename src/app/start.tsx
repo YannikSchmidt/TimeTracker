@@ -11,13 +11,14 @@ import { useData } from '../data/DataProvider';
 import { classifyCode, CODE_KIND_LABEL, isArticleKind, looksLikeNumber, type CodeKind } from '../domain/codes';
 import { suggestQuantity } from '../domain/quantity';
 import { frequentArticles, knownOrders, lastJobForOrder, recentOrders } from '../domain/suggestions';
-import type { Article } from '../domain/types';
+import { SECTION_LABEL } from '../domain/flows';
+import type { Article, Section } from '../domain/types';
 import { articleLabel, findArticleByName, matchArticles, useArticles } from '../hooks/useArticles';
 import { useGroups } from '../hooks/useGroups';
 import { useWork } from '../hooks/useWork';
 import { radius, spacing, usePalette } from '../theme';
 
-type Phase = 'scan' | 'ask' | 'confirm';
+type Phase = 'scan' | 'section' | 'ask' | 'confirm';
 
 /** Rückfrage zu einer Eingabe, die nicht eindeutig ist */
 type Question =
@@ -56,6 +57,8 @@ export default function StartScreen() {
   const [onlyStep, setOnlyStep] = useState<string | null>(null);
   /** Personenzähler: so viele Personen arbeiten mit diesem Timer */
   const [workers, setWorkers] = useState(1);
+  /** Gesamtgeräte: Display-Verheiratung oder Gesamtmontage (eigenständige Aufträge) */
+  const [section, setSection] = useState<Section | null>(null);
   /** wechselt bei jedem neuen Scan-Schritt → Scanner startet neu */
   const [scanRound, setScanRound] = useState(0);
 
@@ -77,18 +80,31 @@ export default function StartScreen() {
     setPhase('confirm');
   };
 
-  /** Nach jeder Eingabe: fertig → Bestätigung, sonst fragen, ob die nächste Nummer gescannt werden soll. */
-  const advance = (next: { order: string | null; article: string | null; skipOrder: boolean; skipArticle: boolean }) => {
+  /**
+   * Nach jeder Eingabe: Gesamtgerät ohne Teil → erst „Display-Verheiratung oder Gesamtmontage?“; fertig → Bestätigung,
+   * sonst fragen, ob die nächste Nummer gescannt werden soll.
+   */
+  const advance = (next: {
+    order: string | null;
+    article: string | null;
+    skipOrder: boolean;
+    skipArticle: boolean;
+    section: Section | null;
+    /** gerade angelegter Artikel (steht noch nicht in der Liste) */
+    articleObj?: Article;
+  }) => {
     setTyping(false);
     setTyped('');
     setQuestion(null);
+    const art = next.articleObj ?? (next.article ? articles.byId.get(next.article) : undefined);
+    if (!next.section && groups.hasSections(art)) return setPhase('section');
     const missingOrder = !next.order && !next.skipOrder;
     const missingArticle = !next.article && !next.skipArticle;
     if (!missingOrder && !missingArticle) return goConfirm(next.order, next.article);
     setPhase('ask');
   };
 
-  const state = () => ({ order: orderNo, article: articleId, skipOrder, skipArticle });
+  const state = () => ({ order: orderNo, article: articleId, skipOrder, skipArticle, section });
 
   const applyOrder = (value: string) => {
     const order = value.trim();
@@ -100,21 +116,29 @@ export default function StartScreen() {
     if (!article && last?.articleId && articles.byId.has(last.articleId)) {
       article = last.articleId;
       setArticleId(article);
+      setSection(null);
     }
-    advance({ ...state(), order, article, skipOrder: false });
+    advance({ ...state(), order, article, skipOrder: false, section: article !== articleId ? null : section });
   };
 
-  const applyArticle = (id: string) => {
+  const applyArticle = (id: string, articleObj?: Article) => {
     setArticleId(id);
     setOnlyStep(null);
     setSkipArticle(false);
-    advance({ ...state(), article: id, skipArticle: false });
+    setSection(null);
+    advance({ ...state(), article: id, skipArticle: false, section: null, articleObj });
+  };
+
+  const chooseSection = (s: Section) => {
+    setSection(s);
+    setOnlyStep(null);
+    advance({ ...state(), section: s });
   };
 
   const createArticle = async (number: string, name = '') => {
     try {
       const created = await mutate((r) => r.articles.create({ number, name, device: '' }));
-      applyArticle(created.id);
+      applyArticle(created.id, created);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -157,9 +181,9 @@ export default function StartScreen() {
     if (starting) return;
     setStarting(true);
     try {
-      const steps = groups.flowOf(article).steps;
+      const steps = groups.flowOf(article, section).steps;
       await mutate((r) =>
-        r.jobs.start({ orderNo, articleId, quantity: parseQuantity(quantity), currentStep: steps[0] ?? null, onlyStep, workers }),
+        r.jobs.start({ orderNo, articleId, quantity: parseQuantity(quantity), currentStep: steps[0] ?? null, onlyStep, workers, section }),
       );
       router.back();
     } catch (e) {
@@ -205,6 +229,14 @@ export default function StartScreen() {
         ok={!!article}
         onEdit={phase === 'confirm' ? () => edit('article') : undefined}
       />
+      {groups.hasSections(article) && (
+        <SummaryRow
+          label="Teil"
+          value={section ? SECTION_LABEL[section] : '–'}
+          ok={!!section}
+          onEdit={phase === 'confirm' ? () => setPhase('section') : undefined}
+        />
+      )}
     </View>
   );
 
@@ -308,6 +340,30 @@ export default function StartScreen() {
         </>
       )}
 
+      {phase === 'section' && (
+        <>
+          <Text style={[styles.title, { color: p.text }]}>Was machst du?</Text>
+          {done}
+          <Card style={{ gap: spacing.md }}>
+            <Text style={{ color: p.text, fontSize: 18, fontWeight: '700' }}>Display-Verheiratung oder Gesamtmontage?</Text>
+            {(['display', 'assembly'] as const).map((s) => (
+              <Button
+                key={s}
+                title={SECTION_LABEL[s]}
+                icon={s === 'display' ? 'tv-outline' : 'construct-outline'}
+                size="large"
+                variant={section === s ? 'success' : 'primary'}
+                onPress={() => chooseSection(s)}
+              />
+            ))}
+            <Text style={{ color: p.muted, fontSize: 12 }}>
+              Beide Teile sind eigene Aufträge mit eigenem Ablauf und eigener Vorgabe. Wer beides macht, startet nach
+              „Fertig“ direkt den anderen Teil.
+            </Text>
+          </Card>
+        </>
+      )}
+
       {phase === 'ask' && (
         <>
           <Text style={[styles.title, { color: p.text }]}>Erkannt</Text>
@@ -340,17 +396,17 @@ export default function StartScreen() {
             <QuantityField value={quantity} onChange={setQuantity} />
             {quantityHint ? <Text style={{ color: p.muted, textAlign: 'center' }}>Vorschlag: {quantityHint}</Text> : null}
           </View>
-          {groups.flowOf(article).steps.length > 0 && (
+          {groups.flowOf(article, section).steps.length > 0 && (
             <View style={{ gap: spacing.sm }}>
               <SectionTitle>Arbeitsschritte</SectionTitle>
               <View style={styles.chips}>
-                <Chip label={`Ganzer Ablauf (${groups.flowOf(article).steps.length})`} selected={!onlyStep} onPress={() => setOnlyStep(null)} />
-                {groups.flowOf(article).steps.map((s) => (
+                <Chip label={`Ganzer Ablauf (${groups.flowOf(article, section).steps.length})`} selected={!onlyStep} onPress={() => setOnlyStep(null)} />
+                {groups.flowOf(article, section).steps.map((s) => (
                   <Chip key={s} label={`Nur ${s}`} selected={onlyStep === s} onPress={() => setOnlyStep(s)} />
                 ))}
               </View>
               <Text style={{ color: p.muted, fontSize: 12 }}>
-                {onlyStep ? `Es wird nur „${onlyStep}“ getrackt – z.B. beim Aushelfen.` : `Start mit „${groups.flowOf(article).steps[0]}“, weiter per „Schritt fertig“.`}
+                {onlyStep ? `Es wird nur „${onlyStep}“ getrackt – z.B. beim Aushelfen.` : `Start mit „${groups.flowOf(article, section).steps[0]}“, weiter per „Schritt fertig“.`}
               </Text>
             </View>
           )}

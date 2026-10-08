@@ -16,11 +16,17 @@ export function TargetsEditor({
   targets,
   onChange,
   exampleQuantity,
+  keyPrefix = '',
+  labelPrefix = '',
 }: {
   steps: string[];
   targets: Record<string, StepTarget>;
   onChange: (targets: Record<string, StepTarget>) => void;
   exampleQuantity: number;
+  /** Schlüssel-Präfix am Artikel (Display-Verheiratung: „display:“) */
+  keyPrefix?: string;
+  /** Präfix der Bedienhilfen-Beschriftung, z.B. „Display “ */
+  labelPrefix?: string;
 }) {
   const p = usePalette();
   const [draft, setDraft] = useState<Draft>(() =>
@@ -28,7 +34,8 @@ export function TargetsEditor({
   );
   const rows = targetSteps(steps);
 
-  const set = (step: string, field: 'setup' | 'perPiece', text: string) => {
+  const set = (row: string, field: 'setup' | 'perPiece', text: string) => {
+    const step = keyPrefix + row;
     const clean = text.replace(/[^0-9.,]/g, '');
     const next = { ...draft, [step]: { ...(draft[step] ?? { setup: '', perPiece: '' }), [field]: clean } };
     setDraft(next);
@@ -38,7 +45,10 @@ export function TargetsEditor({
     });
   };
 
-  const totalMin = rows.reduce((s, step) => s + (targets[step]?.setup ?? 0) + (targets[step]?.perPiece ?? 0) * exampleQuantity, 0);
+  const totalMin = rows.reduce(
+    (s, step) => s + (targets[keyPrefix + step]?.setup ?? 0) + (targets[keyPrefix + step]?.perPiece ?? 0) * exampleQuantity,
+    0,
+  );
 
   return (
     <View style={{ gap: spacing.sm }}>
@@ -55,12 +65,12 @@ export function TargetsEditor({
           {(['setup', 'perPiece'] as const).map((field) => (
             <TextInput
               key={field}
-              value={draft[step]?.[field] ?? ''}
+              value={draft[keyPrefix + step]?.[field] ?? ''}
               onChangeText={(t) => set(step, field, t)}
               placeholder="0"
               placeholderTextColor={p.muted}
               keyboardType="decimal-pad"
-              accessibilityLabel={`${field === 'setup' ? 'Rüstzeit' : 'Einzelzeit'} ${step === WHOLE_ORDER ? 'Auftrag' : step}`}
+              accessibilityLabel={`${labelPrefix}${field === 'setup' ? 'Rüstzeit' : 'Einzelzeit'} ${step === WHOLE_ORDER ? 'Auftrag' : step}`}
               style={[styles.input, { color: p.text, borderColor: p.border }]}
             />
           ))}

@@ -199,6 +199,15 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       ALTER TABLE entries ADD COLUMN workers INTEGER NOT NULL DEFAULT 1;
     `);
   },
+
+  // v8: Gesamtgeräte in Display-Verheiratung und Gesamtmontage aufgeteilt
+  async (db) => {
+    await db.execAsync(`
+      ALTER TABLE jobs ADD COLUMN section TEXT;
+      ALTER TABLE product_groups ADD COLUMN display_steps TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE articles ADD COLUMN no_sections INTEGER NOT NULL DEFAULT 0;
+    `);
+  },
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

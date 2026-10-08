@@ -27,8 +27,8 @@ it('erzeugt deutsche CSV pro Auftrag mit Arbeits-, Gesamt- und Nacharbeitszeit',
     { id: 's3', jobId: 'R', startAt: at('2026-03-02T13:00'), endAt: at('2026-03-02T13:30'), step: null, ...meta },
   ];
   expect(jobsToCsv(jobs, entries, dims, values, articles, 0).split('\r\n')).toEqual([
-    'Art;Datum;Start;Ende;Auftragsnummer;Artikelnummer;Artikelbenennung;Endgerät;Stückzahl;Arbeitszeit (h);Personenzeit (h);Vorgabe (h);Gesamtzeit (h);Nacharbeit (h);Nacharbeitsgrund;Projekt;Notiz',
-    'Auftrag;02.03.2026;08:00;11:00;A-77;4711;Halter;Pumpe P3;24;2,00;2,00;;3,00;0,50;;Kunde A;"Sagt ""Hallo""; ok"',
-    'Nacharbeit;02.03.2026;13:00;13:30;A-77;4711;Halter;Pumpe P3;;0,50;0,50;;0,50;;Grat;;',
+    'Art;Datum;Start;Ende;Auftragsnummer;Artikelnummer;Artikelbenennung;Endgerät;Teil;Stückzahl;Arbeitszeit (h);Personenzeit (h);Vorgabe (h);Gesamtzeit (h);Nacharbeit (h);Nacharbeitsgrund;Projekt;Notiz',
+    'Auftrag;02.03.2026;08:00;11:00;A-77;4711;Halter;Pumpe P3;;24;2,00;2,00;;3,00;0,50;;Kunde A;"Sagt ""Hallo""; ok"',
+    'Nacharbeit;02.03.2026;13:00;13:30;A-77;4711;Halter;Pumpe P3;;;0,50;0,50;;0,50;;Grat;;',
   ]);
 });

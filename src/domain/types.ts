@@ -10,6 +10,8 @@ export interface SyncMeta {
 }
 
 export type JobKind = 'order' | 'rework';
+/** Teil eines Gesamtgeräte-Auftrags: Display-Verheiratung oder Gesamtmontage – jeweils ein eigenständiger Auftrag */
+export type Section = 'display' | 'assembly';
 export type JobStatus = 'running' | 'paused' | 'done';
 
 /** Felder eines Auftrags, die beim Start/Bearbeiten gesetzt werden. */
@@ -46,6 +48,8 @@ export interface Job extends JobFields, SyncMeta {
   onlyStep: string | null;
   /** Personenzähler: so viele Personen arbeiten gerade mit diesem Timer (fehlt = 1) */
   workers?: number;
+  /** Teil bei Gesamtgeräten (Display-Verheiratung / Gesamtmontage); fehlt/null = nicht aufgeteilt (zählt wie Gesamtmontage) */
+  section?: Section | null;
 }
 
 /** Ein Arbeitsabschnitt eines Auftrags (zwischen Start/Fortsetzen und Pause/Beenden). */
@@ -82,6 +86,8 @@ export interface Article extends SyncMeta {
   groupId: string | null;
   /** Vorgabezeiten in Minuten je Arbeitsschritt (Schlüssel = Schrittname, '' = ganzer Auftrag ohne Ablauf) */
   targets: Record<string, { setup: number; perPiece: number }>;
+  /** Gesamtgerät ohne Aufteilung in Display-Verheiratung und Gesamtmontage (keine Abfrage beim Start) */
+  noSections?: boolean;
   /** Wer den Artikel zuletzt geändert hat (Team-Sync) */
   updatedBy?: string | null;
 }
@@ -165,6 +171,8 @@ export interface ProductGroup extends SyncMeta {
   name: string;
   /** null = Hauptgruppe */
   parentId: string | null;
-  /** Arbeitsschritte in Reihenfolge; leer bei einer Untergruppe = Ablauf der Hauptgruppe */
+  /** Arbeitsschritte in Reihenfolge; leer bei einer Untergruppe = Ablauf der Hauptgruppe. Bei Gesamtgeräten: Gesamtmontage */
   steps: string[];
+  /** Nur Gesamtgeräte: Ablauf der Display-Verheiratung; leer bei einer Untergruppe = Ablauf der Hauptgruppe */
+  displaySteps?: string[];
 }

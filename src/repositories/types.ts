@@ -17,6 +17,8 @@ export interface JobStartInput extends Partial<JobFields> {
   onlyStep?: string | null;
   /** Personenzähler (Standard 1) */
   workers?: number;
+  /** Teil bei Gesamtgeräten */
+  section?: Job['section'];
 }
 
 /**
@@ -39,6 +41,11 @@ export interface JobRepository {
    * Auch für den freien Wechsel per Schritt-Knopf; bei Einzelschritt-Timern wird der Schritt zum neuen Einzelschritt.
    */
   nextStep(id: string, next: string | null): Promise<void>;
+  /**
+   * Bisherige Zeit übernehmen: Die letzten zusammenhängenden Abschnitte mit dem bisherigen Schritt (seit dem letzten
+   * Wechsel bzw. seit dem Start) zählen ab jetzt zu `step`; der laufende Abschnitt läuft weiter.
+   */
+  relabelStep(id: string, step: string): Promise<void>;
   /**
    * Personenzähler ändern. Läuft der Auftrag, endet der aktuelle Abschnitt jetzt und ein neuer mit der
    * neuen Anzahl beginnt – so zählt jede Zeitspanne mit der richtigen Personenzahl.
@@ -82,13 +89,15 @@ export interface ArticleInput {
   groupId?: string | null;
   /** Vorgabezeiten (Minuten) je Arbeitsschritt */
   targets?: Article['targets'];
+  /** Gesamtgerät nicht in Display-Verheiratung und Gesamtmontage aufteilen */
+  noSections?: boolean;
 }
 
 export interface GroupRepository {
   /** Hauptgruppen + Untergruppen (nicht gelöschte) */
   list(): Promise<ProductGroup[]>;
-  create(input: { main: MainGroup; name: string; parentId: string; steps?: string[] }): Promise<ProductGroup>;
-  update(id: string, input: { name?: string; steps?: string[] }): Promise<void>;
+  create(input: { main: MainGroup; name: string; parentId: string; steps?: string[]; displaySteps?: string[] }): Promise<ProductGroup>;
+  update(id: string, input: { name?: string; steps?: string[]; displaySteps?: string[] }): Promise<void>;
 }
 
 export interface ArticleRepository {

@@ -8,7 +8,7 @@ import { DimensionPicker } from '../../components/ValuePicker';
 import { DeleteAction } from '../../components/DeleteAction';
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData } from '../../data/DataProvider';
-import { timeByStep } from '../../domain/flows';
+import { SECTION_LABEL, timeByStep } from '../../domain/flows';
 import { balanceMs, balancePct, compareShare, formatBalance, formatPct, orderArticle, sameOrder, WHOLE_ORDER } from '../../domain/targets';
 import { jobName, jobTimes, reworkOf } from '../../domain/jobs';
 import { reworkReasons } from '../../domain/suggestions';
@@ -101,7 +101,29 @@ export default function JobScreen() {
   const partners = job && !isRework ? work.all.jobs.filter((j) => j.id !== job.id && !j.deletedAt && sameOrder(job, j)) : [];
   // Vorgabe vom eigenen Artikel, sonst vom Artikel eines Kollegen (z.B. doppelt angelegter Artikel)
   const targetArticle = job ? orderArticle([job, ...partners], articles.byId) : undefined;
-  const flow = groups.flowOf((job?.articleId ? articles.byId.get(job.articleId) : undefined) ?? targetArticle);
+  const flow = groups.flowOf((job?.articleId ? articles.byId.get(job.articleId) : undefined) ?? targetArticle, job?.section ?? null);
+  // Gesamtgerät: den anderen Teil (Display-Verheiratung / Gesamtmontage) direkt anschließend starten
+  const otherSection = job?.kind === 'order' && job.section ? (job.section === 'display' ? 'assembly' : 'display') : null;
+  const otherDone =
+    !!job &&
+    !!otherSection &&
+    work.jobs.some((j) => j.kind === 'order' && j.section === otherSection && j.orderNo === job.orderNo && j.articleId === job.articleId);
+  const startOther = async () => {
+    if (!job || !otherSection) return;
+    const steps = groups.flowOf(articleOf(job), otherSection).steps;
+    await mutate((r) =>
+      r.jobs.start({
+        orderNo: job.orderNo,
+        articleId: job.articleId,
+        quantity: job.quantity,
+        valueIds: job.valueIds,
+        workers: job.workers ?? 1,
+        section: otherSection,
+        currentStep: steps[0] ?? null,
+      }),
+    );
+    router.back();
+  };
   const stepTimes = job ? timeByStep(entries, flow.steps, now).filter((s) => s.step !== null || entries.some((e) => e.step)) : [];
   const parts = job ? [{ job, entries }, ...partners.map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [] }))] : [];
   // Vorgabe im Verhältnis der geleisteten Zeit aufgeteilt: hier der Anteil dieses Timers
@@ -147,6 +169,15 @@ export default function JobScreen() {
             </Text>
           ) : (
             <JobButtons job={job} actions={actions} onReopen={() => mutate((r) => r.jobs.reopen(job.id))} />
+          )}
+          {done === '1' && otherSection && !otherDone && (
+            <Button
+              title={`Weiter mit ${SECTION_LABEL[otherSection]}`}
+              icon="play"
+              variant="success"
+              size="large"
+              onPress={() => void startOther()}
+            />
           )}
           {done === '1' && <Button title="Fertig" variant="secondary" onPress={() => router.back()} />}
         </Card>
