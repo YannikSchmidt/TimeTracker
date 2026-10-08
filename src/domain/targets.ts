@@ -51,7 +51,12 @@ export function compareJob(job: Job, entries: Entry[], article: Article | null |
  * Personenzeiten werden addiert, die Vorgabe gilt einmal für den Auftrag (größte angegebene Stückzahl).
  */
 export function compareOrder(parts: { job: Job; entries: Entry[] }[], article: Article | null | undefined, steps: string[], now: Millis): Comparison {
-  const onlySteps = parts.every((p) => p.job.onlyStep) ? new Set(parts.map((p) => p.job.onlyStep!)) : null;
+  // Einzelschritt-Timer: verglichen werden die Schritte, die tatsächlich getrackt wurden (auch nach Schrittwechsel)
+  const onlySteps = parts.every((p) => p.job.onlyStep)
+    ? new Set(
+        parts.flatMap((p) => [p.job.onlyStep!, ...p.entries.filter((e) => !e.deletedAt && e.step).map((e) => e.step!)]),
+      )
+    : null;
   const relevant = onlySteps
     ? [...steps.filter((s) => onlySteps.has(s)), ...[...onlySteps].filter((s) => !steps.includes(s))]
     : targetSteps(steps);
@@ -87,9 +92,12 @@ export function compareShare(
   const mine = parts.filter((p) => own.has(p.job.id)).flatMap((p) => p.entries).filter((e) => !e.deletedAt);
   const myTotal = mine.reduce((s, e) => s + entryMs(e, now, true), 0);
   const myByStep = new Map(timeByStep(mine, steps, now, true).map((s) => [s.step, s.ms]));
+  // Anteil an Schritten, an denen noch niemand gearbeitet hat: wie bei der Zeit insgesamt (allein = 100 %)
+  const ownParts = parts.filter((p) => own.has(p.job.id)).length;
+  const overall = whole.actualMs > 0 ? myTotal / whole.actualMs : parts.length ? ownParts / parts.length : 0;
   const byStep = whole.byStep.map((s) => {
     const actualMs = s.step === WHOLE_ORDER ? myTotal : (myByStep.get(s.step) ?? 0);
-    const share = s.actualMs > 0 ? actualMs / s.actualMs : 0;
+    const share = s.actualMs > 0 ? actualMs / s.actualMs : overall;
     return { step: s.step, actualMs, targetMs: s.targetMs === null ? null : Math.round(s.targetMs * share) };
   });
   const withTarget = byStep.filter((s) => s.targetMs !== null);

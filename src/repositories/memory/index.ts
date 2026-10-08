@@ -234,6 +234,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         const wasRunning = j.status === 'running';
         closeOpen(t, id);
         Object.assign(j, { currentStep: next, updatedAt: t });
+        if (j.onlyStep && next) j.onlyStep = next; // Einzelschritt-Timer: gewählter Schritt wird der neue Einzelschritt
         if (wasRunning && next) {
           openEntry(id, t, next, j.workers ?? 1);
           j.status = 'running';

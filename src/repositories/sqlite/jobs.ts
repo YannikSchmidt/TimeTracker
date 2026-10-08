@@ -207,6 +207,8 @@ export class SqliteJobRepository implements JobRepository {
     await this.db.withTransactionAsync(async () => {
       await this.closeOpen(now, id);
       await this.db.runAsync('UPDATE jobs SET current_step = ?, updated_at = ? WHERE id = ?', next, now, id);
+      // Einzelschritt-Timer: gewählter Schritt wird der neue Einzelschritt
+      if (job.onlyStep && next) await this.db.runAsync('UPDATE jobs SET only_step = ? WHERE id = ?', next, id);
       if (job.status === 'running' && next) {
         await this.openEntry(id, now, next, job.workers ?? 1);
         await this.db.runAsync("UPDATE jobs SET status = 'running' WHERE id = ?", id);

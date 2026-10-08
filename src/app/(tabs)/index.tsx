@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { startOfDay } from 'date-fns';
 import { router } from 'expo-router';
+import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { JobCard } from '../../components/JobCard';
@@ -8,6 +9,7 @@ import { JobRow } from '../../components/JobRow';
 import { SyncBadge, SyncSetupHint } from '../../components/SyncBadge';
 import { UpdateBanner } from '../../components/UpdateBanner';
 import { Empty, SectionTitle } from '../../components/ui';
+import { stepChoices } from '../../domain/flows';
 import { jobName, reworkOf } from '../../domain/jobs';
 import { sameOrder } from '../../domain/targets';
 import { useArticles } from '../../hooks/useArticles';
@@ -27,6 +29,19 @@ export default function TimerScreen() {
   const now = useNow(1000);
 
   const dayStart = startOfDay(now).getTime();
+
+  // Schon verwendete Arbeitsschritte je Artikel (nur Namen, keine Zeiten) – Auswahl im Schritt-Knopf
+  const usedSteps = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const j of work.all.jobs) {
+      const key = j.articleId ?? `job:${j.id}`;
+      const list = map.get(key) ?? [];
+      list.push(...(work.all.entriesOf.get(j.id) ?? []).filter((e) => !e.deletedAt && e.step).map((e) => e.step!));
+      if (j.currentStep) list.push(j.currentStep);
+      map.set(key, list);
+    }
+    return map;
+  }, [work.all]);
 
   const open = sortOpenJobs(work.jobs.filter((j) => j.status !== 'done'));
   // Nacharbeit zu einem offenen Auftrag steht in dessen Kachel; sonst als eigene Kachel (gleiche Farbe)
@@ -74,6 +89,10 @@ export default function TimerScreen() {
               article={job.articleId ? articles.byId.get(job.articleId) : undefined}
               reworks={reworks.map((r) => ({ job: r, entries: work.entriesOf.get(r.id) ?? [] }))}
               steps={groups.flowOf(job.articleId ? articles.byId.get(job.articleId) : undefined).steps}
+              stepChoices={stepChoices(
+                groups.flowOf(job.articleId ? articles.byId.get(job.articleId) : undefined).steps,
+                usedSteps.get(job.articleId ?? `job:${job.id}`) ?? [],
+              )}
               partners={work.all.jobs
                 .filter((j) => j.id !== job.id && !work.isOwn(j) && sameOrder(job, j))
                 .map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [], name: work.nameOf(j.createdBy) }))}

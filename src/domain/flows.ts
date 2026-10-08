@@ -76,6 +76,29 @@ export function timeByStep(entries: Entry[], steps: string[], now: number, perso
   return ordered;
 }
 
+/**
+ * Auswahl für den Schritt-Knopf: zuerst der Ablauf in Reihenfolge, danach weitere Schritte, die für den Artikel
+ * schon verwendet wurden (häufigste zuerst). Groß-/Kleinschreibung zählt nicht doppelt.
+ */
+export function stepChoices(flowSteps: string[], used: (string | null | undefined)[]): string[] {
+  const counts = new Map<string, { name: string; n: number }>();
+  for (const s of used) {
+    const name = s?.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const c = counts.get(key) ?? { name, n: 0 };
+    c.n++;
+    counts.set(key, c);
+  }
+  const flow = cleanSteps(flowSteps);
+  const inFlow = new Set(flow.map((s) => s.toLowerCase()));
+  const extra = [...counts.entries()]
+    .filter(([key]) => !inFlow.has(key))
+    .sort((a, b) => b[1].n - a[1].n || a[1].name.localeCompare(b[1].name, 'de'))
+    .map(([, c]) => c.name);
+  return [...flow, ...extra];
+}
+
 /** Schritte bereinigen: getrimmt, ohne leere und doppelte */
 export function cleanSteps(steps: string[]): string[] {
   const seen = new Set<string>();

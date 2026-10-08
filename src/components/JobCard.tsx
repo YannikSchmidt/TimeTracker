@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { jobName, jobTimes } from '../domain/jobs';
@@ -10,6 +11,7 @@ import type { Article, Entry, Job } from '../domain/types';
 import { articleDetails } from '../hooks/useArticles';
 import { useJobActions } from '../hooks/useJobActions';
 import { orderColor, radius, spacing, usePalette } from '../theme';
+import { StepPicker } from './StepPicker';
 import { Button } from './ui';
 import { WorkersStepper } from './WorkersStepper';
 
@@ -29,6 +31,7 @@ export function JobCard({
   reworks = [],
   partners = [],
   steps = [],
+  stepChoices = steps,
   now,
 }: {
   job: Job;
@@ -40,10 +43,13 @@ export function JobCard({
   partners?: (SubJob & { name: string })[];
   /** Ablauf des Artikels (Arbeitsschritte in Reihenfolge) */
   steps?: string[];
+  /** Auswahl im Schritt-Knopf: Ablauf + für den Artikel schon verwendete Schritte */
+  stepChoices?: string[];
   now: number;
 }) {
   const p = usePalette();
   const actions = useJobActions();
+  const [picking, setPicking] = useState(false);
   const t = jobTimes(job, entries, now);
   const running = job.status === 'running';
   const rework = job.kind === 'rework';
@@ -129,7 +135,7 @@ export function JobCard({
         {step && (
           <View style={[styles.step, { backgroundColor: color + '14', borderColor: color + '55' }]}>
             <Text style={{ color: p.muted, fontSize: 12 }}>
-              {job.onlyStep ? 'Nur dieser Schritt' : stepIndex >= 0 ? `Schritt ${stepIndex + 1} von ${steps.length}` : 'Schritt'}
+              {job.onlyStep ? 'Einzelschritt (nicht der ganze Ablauf)' : stepIndex >= 0 ? `Schritt ${stepIndex + 1} von ${steps.length}` : 'Schritt'}
             </Text>
             <View style={styles.stepRow}>
               <Text style={{ color: p.text, fontSize: 18, fontWeight: '700', flex: 1 }} numberOfLines={1}>
@@ -152,17 +158,36 @@ export function JobCard({
           </View>
         )}
         <View style={styles.buttons}>
-          <View style={{ flex: 2 }}>
+          <View style={{ flex: 1.5 }}>
             {running ? (
               <Button title="Pause" icon="pause" variant="secondary" size="large" onPress={() => void actions.pause(job)} accessibilityLabel={`${name} pausieren`} />
             ) : (
               <Button title="Weiter" icon="play" variant="success" size="large" onPress={() => void actions.resume(job)} accessibilityLabel={`${name} fortsetzen`} />
             )}
           </View>
+          {job.kind === 'order' && (
+            <View style={{ flex: 1.4 }}>
+              <Button title="Schritt" icon="list" variant="secondary" size="large" onPress={() => setPicking(true)} accessibilityLabel={`Arbeitsschritt für ${name} wählen`} />
+            </View>
+          )}
           <View style={{ flex: 1.4 }}>
             <Button title="Fertig" icon="checkmark" variant={rework ? 'warning' : 'primary'} size="large" onPress={() => void actions.finish(job)} accessibilityLabel={`${name} beenden`} />
           </View>
         </View>
+
+        {job.kind === 'order' && (
+          <StepPicker
+            visible={picking}
+            title={`Arbeitsschritt · ${name}`}
+            current={step}
+            choices={stepChoices}
+            onClose={() => setPicking(false)}
+            onPick={(s) => {
+              setPicking(false);
+              void actions.switchStep(job, s);
+            }}
+          />
+        )}
 
         {reworks.map((r) => (
           <ReworkRow key={r.job.id} sub={r} parentName={name} now={now} />

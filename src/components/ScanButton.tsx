@@ -6,11 +6,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { radius, spacing, usePalette } from '../theme';
 import type { ScanKind } from './barcode.web';
+import { useScanConfirm } from '../hooks/useRequiredReads';
 import { Button } from './ui';
 
-/** Strichcodes (Aufträge, Artikel) bzw. QR-Codes (Einladungen) – die Kamera liest nur die gewählte Art. */
+/**
+ * Codes der Auftragspapiere (Auftrag: Code 39, Artikel: Data Matrix, Code 128 als Reserve) bzw. QR-Codes
+ * (Einladungen) – die Kamera liest nur diese. Andere Strichcode-Arten (ITF, Codabar …) lesen halbe Code-39-Codes
+ * gern als kürzere, falsche Nummer.
+ */
 export const BARCODE_TYPES: Record<ScanKind, BarcodeType[]> = {
-  barcode: ['code128', 'code39', 'code93', 'ean13', 'ean8', 'upc_a', 'upc_e', 'itf14', 'codabar'],
+  barcode: ['code39', 'code128', 'datamatrix'],
   qr: ['qr'],
 };
 
@@ -21,9 +26,11 @@ export function ScanButton({ label, onScan, kind = 'barcode' }: { label: string;
   const [permission, requestPermission] = useCameraPermissions();
   // Der Scanner meldet einen Code oft mehrfach hintereinander – nur den ersten übernehmen.
   const handled = useRef(false);
+  const confirm = useScanConfirm(kind);
 
   const openScanner = async () => {
     handled.current = false;
+    confirm.reset();
     if (!permission?.granted) await requestPermission();
     setOpen(true);
   };
@@ -53,7 +60,7 @@ export function ScanButton({ label, onScan, kind = 'barcode' }: { label: string;
                 facing="back"
                 barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES[kind] }}
                 onBarcodeScanned={({ data }) => {
-                  if (handled.current || !data) return;
+                  if (handled.current || !data?.trim() || !confirm.accept(data)) return;
                   handled.current = true;
                   setOpen(false);
                   onScan(data.trim());

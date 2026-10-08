@@ -14,7 +14,8 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
 - **Aufträge als Timer-Liste**: Mehrere Aufträge können offen sein, aber immer läuft nur einer. Jeder Auftrag hat
   seine eigene Farbe; Nacharbeit läuft in der Kachel ihres Auftrags.
   Starten oder Fortsetzen eines Auftrags pausiert automatisch den laufenden. Jeder Auftrag ist pausierbar.
-- **Start mit Scan zuerst**: „Neuer Auftrag“ → Strichcodes in beliebiger Reihenfolge scannen. Die App erkennt am
+- **Start mit Scan zuerst**: „Neuer Auftrag“ → Codes vom Auftragspapier in beliebiger Reihenfolge scannen (Auftrag
+  als Strichcode, Artikel als Data-Matrix-Quadrat). Die App erkennt am
   Aufbau, was es ist (Auftrag `25/26/27*****`, Gesamtgerät `07******`, Front/Einzelteil `500000****` – in den
   Einstellungen änderbar) und fragt, ob die nächste Nummer gescannt werden soll. Ist der Auftrag schon bekannt, werden
   Artikel und Stückzahl übernommen. Eintippen (Nummer oder Bezeichnung) und „ohne Auftrag/Artikel“ gehen jederzeit;
@@ -22,6 +23,8 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
 - **Arbeitsschritte**: Gesamtgeräte und Fronten mit Untergruppen; jede Gruppe hat einen frei bearbeitbaren Ablauf
   (z.B. Teile holen → Gesamtmontage → Prüfen). Im Timer schließt „Schritt fertig“ den Schritt ab und startet den
   nächsten; die Zeit pro Schritt steht im Auftrag. Beim Start kann auch nur ein einzelner Schritt getrackt werden.
+  Der Knopf **„Schritt“** neben Pause/Fertig wechselt jederzeit auf einen beliebigen Schritt – Auswahl aus dem Ablauf
+  und den schon verwendeten Schritten des Artikels, oder einen neuen eingeben.
 - **Vorgabe gegen Ist**: Pro Artikel und Arbeitsschritt Rüstzeit (einmal pro Auftrag) und Einzelzeit (pro Stück) in
   Minuten. Die Kachel zeigt die Vorgabe, der Auftrag Ist/Vorgabe/Abweichung je Schritt, die Statistik den Vergleich je
   Untergruppe und Artikel (Gesamtgeräte und Fronten getrennt). Arbeits-/Fehlzeiten werden nicht ausgewertet (Stempeluhr).
@@ -52,7 +55,8 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
 - **Kollegen einladen per QR-Code**: kein GitHub-Konto nötig – QR scannen, Name und Team-Passwort eingeben.
 - **Verbesserungsvorschläge** aus der App → Issues im privaten Daten-Repo (offline vorgemerkt).
 - **Automatische Updates**: keine Neuinstallation; die App lädt neue Versionen selbst (im Hintergrund oder per Hinweis).
-- **Scanner**: Live-Kamera (App und Web-App), alternativ per Foto.
+- **Scanner**: Live-Kamera (App und Web-App), alternativ per Foto. Liest Code 39, Code 128 und Data Matrix; ein Code
+  zählt erst, wenn er mehrmals gleich erkannt wurde (gegen halb gelesene Nummern). 2×-Zoom für kleine Codes.
 - **Einstellungen**: Standard-Stückzahl, Nummernmuster, Merkmale, Team-Sync, CSV-Export pro Auftrag, JSON-Backup.
 
 ## Entwickeln und testen

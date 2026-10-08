@@ -36,6 +36,7 @@ export interface JobRepository {
   /**
    * Arbeitsschritt abschließen und zum nächsten wechseln: Der laufende Abschnitt endet jetzt,
    * läuft der Auftrag, beginnt sofort ein neuer Abschnitt mit dem nächsten Schritt.
+   * Auch für den freien Wechsel per Schritt-Knopf; bei Einzelschritt-Timern wird der Schritt zum neuen Einzelschritt.
    */
   nextStep(id: string, next: string | null): Promise<void>;
   /**

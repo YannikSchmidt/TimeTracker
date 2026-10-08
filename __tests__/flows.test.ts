@@ -1,5 +1,6 @@
 import { DEFAULT_CODE_PATTERNS } from '../src/domain/codes';
-import { cleanSteps, entryMs, flowOf, mainGroupOf, MAIN_GROUP_ID, nextStep, timeByStep } from '../src/domain/flows';
+import { cleanSteps, entryMs, flowOf, mainGroupOf, MAIN_GROUP_ID, nextStep, stepChoices, timeByStep } from '../src/domain/flows';
+import { compareOrder } from '../src/domain/targets';
 import type { Article, Entry } from '../src/domain/types';
 import { mergeShared, splitSnapshot } from '../src/domain/merge';
 import { createMemoryStore } from '../src/repositories/memory';
@@ -53,6 +54,16 @@ describe('Abläufe', () => {
     ]);
     expect(cleanSteps([' a', 'A', '', 'b '])).toEqual(['a', 'b']);
   });
+
+  it('Auswahl im Schritt-Knopf: Ablauf zuerst, dann bisher verwendete (häufigste zuerst), ohne Doppelte', () => {
+    expect(stepChoices(['Teile holen', 'Montage'], ['Prüfen', 'montage', 'Verpacken', 'Prüfen', null, ' ', 'Teile holen'])).toEqual([
+      'Teile holen',
+      'Montage',
+      'Prüfen',
+      'Verpacken',
+    ]);
+    expect(stepChoices([], [])).toEqual([]);
+  });
 });
 
 describe('Timer mit Arbeitsschritten', () => {
@@ -84,6 +95,28 @@ describe('Timer mit Arbeitsschritten', () => {
     await s.repos.jobs.nextStep(job.id, 'Prüfen');
     expect((await s.repos.jobs.get(job.id))?.status).toBe('paused');
     expect((await s.repos.entries.listAll()).length).toBe(1);
+  });
+
+  it('Schritt-Knopf: freier Wechsel bucht die Zeit auf den gewählten Schritt; Einzelschritt wandert mit', async () => {
+    const s = store();
+    const job = await s.repos.jobs.start({ orderNo: '2600002', onlyStep: 'Kleben' });
+    s.tick(40_000);
+    await s.repos.jobs.nextStep(job.id, 'Schleifen'); // neuer, frei eingegebener Schritt
+    s.tick(20_000);
+    await s.repos.jobs.finish(job.id);
+    const j = (await s.repos.jobs.get(job.id))!;
+    expect(j).toMatchObject({ currentStep: 'Schleifen', onlyStep: 'Schleifen' });
+    const entries = (await s.repos.entries.listAll()).filter((e) => e.jobId === job.id);
+    expect(timeByStep(entries, ['Kleben', 'Schleifen'], 0)).toEqual([
+      { step: 'Kleben', ms: 40_000 },
+      { step: 'Schleifen', ms: 20_000 },
+    ]);
+    // Vorgabe-Vergleich umfasst beide getrackten Schritte
+    const meta = { createdAt: 0, updatedAt: 0, deletedAt: null };
+    const article = { id: 'a', number: '', name: '', device: '', groupId: null, targets: { Kleben: { setup: 1, perPiece: 0 }, Schleifen: { setup: 1, perPiece: 0 }, Prüfen: { setup: 5, perPiece: 0 } }, ...meta };
+    const c = compareOrder([{ job: j, entries }], article, ['Kleben', 'Schleifen', 'Prüfen'], 0);
+    expect(c.byStep.map((x) => x.step)).toEqual(['Kleben', 'Schleifen']);
+    expect(c.targetMs).toBe(120_000);
   });
 
   it('Gruppen landen im gemeinsamen Teil und Artikel merken sich ihre Gruppe', async () => {
