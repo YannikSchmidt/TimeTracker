@@ -18,6 +18,7 @@ export function StepPicker({
   current,
   choices,
   sinceMs = 0,
+  autoTakeOver = false,
   flowSteps = [],
   canHide = false,
   onRename,
@@ -31,6 +32,8 @@ export function StepPicker({
   choices: string[];
   /** Zeit seit dem letzten Schrittwechsel bzw. seit dem Start (für „bisherige Zeit übernehmen“) */
   sinceMs?: number;
+  /** nach „Schritt beendet“: die Zeit seitdem zählt ohne Rückfrage zum gewählten Schritt */
+  autoTakeOver?: boolean;
   /** Schritte aus dem Ablauf – werden unter „Abläufe“ bearbeitet, nicht hier */
   flowSteps?: string[];
   /** Entfernen möglich (nur mit Artikel – die Auswahl gehört zum Artikel) */
@@ -60,7 +63,8 @@ export function StepPicker({
     onPick(step, takeOver);
   };
   // Erst fragen, wenn seit dem letzten Wechsel nennenswert Zeit lief (≥ 1 Minute)
-  const pick = (step: string) => (step !== current && sinceMs >= 60_000 ? setPending(step) : finish(step, false));
+  const pick = (step: string) =>
+    step === current ? finish(step, false) : autoTakeOver ? finish(step, true) : sinceMs >= 60_000 ? setPending(step) : finish(step, false);
   const close = () => {
     setPending(null);
     setEditing(false);

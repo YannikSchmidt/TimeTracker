@@ -27,7 +27,9 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
   und den schon verwendeten Schritten des Artikels, oder einen neuen eingeben. Lief schon Zeit seit dem Start bzw. dem
   letzten Wechsel, fragt die App, ob diese Zeit auch zum gewählten Schritt zählen soll. Über **„Bearbeiten“** in der
   Auswahl lassen sich früher verwendete Schritte umbenennen oder entfernen; im Auftrag kann man bei jedem
-  Arbeitsabschnitt Zeit und Schritt korrigieren oder den Abschnitt löschen.
+  Arbeitsabschnitt Zeit und Schritt korrigieren oder den Abschnitt löschen. Den laufenden Schritt (Name/Schritt-Uhr in
+  der Kachel) antippen: **Schritt beendet**, **= ganze Arbeitszeit** oder **Schrittzeit löschen**. Nach „Schritt
+  beendet“ zählt die Zeit bis zur Wahl des nächsten Schritts automatisch zu diesem (Arbeitszeit minus beendete Schritte).
 - **Gesamtgeräte in zwei Teilen**: Nach dem Scan eines Gesamtgeräts fragt die App „Display-Verheiratung oder
   Gesamtmontage?“. Beide Teile sind eigenständige Aufträge mit eigenem Ablauf, eigenen Vorgabezeiten und eigenem
   Eintrag in der Statistik. Wer beides macht, startet nach „Fertig“ direkt mit „Weiter mit Gesamtmontage“ den anderen

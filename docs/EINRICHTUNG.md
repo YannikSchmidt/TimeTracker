@@ -115,6 +115,12 @@ Lief seit dem Start bzw. dem letzten Schrittwechsel schon Zeit (ab 1 Minute), fr
 dem Start) auch zu ‚Teile holen‘ zählen?“ – **Ja, übernehmen** ordnet diese Zeit dem gewählten Schritt zu, **Nein, ab
 jetzt** zählt erst ab jetzt.
 
+**Laufenden Schritt korrigieren** – in der Kachel Name bzw. Schritt-Uhr des Schritts antippen:
+- **Schritt beendet**: der Schritt ist fertig, die Zeit läuft weiter („Kein Schritt aktiv“). Der nächste gewählte
+  Schritt bekommt diese Zeit automatisch – also Arbeitszeit minus alle beendeten Schritte.
+- **= ganze Arbeitszeit**: die Schritt-Uhr zeigt danach dasselbe wie die große Uhr (z.B. 2:00 statt 1:00).
+- **Schrittzeit löschen**: die Zeit des Schritts zählt wieder „ohne Schritt“, der Timer läuft ohne Schritt weiter.
+
 **Schritte korrigieren:**
 - In der Schritt-Auswahl oben **„Bearbeiten“**: früher verwendete Schritte **umbenennen** (Stift – ändert den Namen in
   deinen Aufträgen mit diesem Artikel) oder **entfernen** (Papierkorb – blendet ihn in der Auswahl aus, gebuchte

@@ -238,10 +238,26 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         closeOpen(t, id);
         Object.assign(j, { currentStep: next, updatedAt: t });
         if (j.onlyStep && next) j.onlyStep = next; // Einzelschritt-Timer: gewählter Schritt wird der neue Einzelschritt
-        if (wasRunning && next) {
+        // läuft der Timer, geht die Zeit sofort weiter – mit dem nächsten Schritt bzw. ohne Schritt („Schritt beendet“)
+        if (wasRunning) {
           openEntry(id, t, next, j.workers ?? 1);
           j.status = 'running';
         }
+        changed();
+      },
+      async assignAllToStep(id, step) {
+        const j = findJob(id);
+        const t = now();
+        for (const e of entries) if (e.jobId === id && !e.deletedAt && e.step !== step) Object.assign(e, { step, updatedAt: t });
+        Object.assign(j, { currentStep: step, updatedAt: t });
+        if (j.onlyStep) j.onlyStep = step;
+        changed();
+      },
+      async clearStep(id, step) {
+        const j = findJob(id);
+        const t = now();
+        for (const e of entries) if (e.jobId === id && !e.deletedAt && e.step === step) Object.assign(e, { step: null, updatedAt: t });
+        if (j.currentStep === step) Object.assign(j, { currentStep: null, updatedAt: t });
         changed();
       },
       async relabelStep(id, step) {
