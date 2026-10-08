@@ -1,6 +1,6 @@
 import { entryMs, timeByStep } from './flows';
 import { formatDuration } from './time';
-import type { Article, Entry, Job, Millis } from './types';
+import type { Article, Entry, Job, Millis, Section } from './types';
 
 /** Vorgabe eines Arbeitsschritts in Minuten: Rüstzeit (einmal pro Auftrag) + Einzelzeit (pro Stück). */
 export interface StepTarget {
@@ -10,6 +10,25 @@ export interface StepTarget {
 
 /** Schlüssel für Artikel ohne Ablauf: Vorgabe für den ganzen Auftrag */
 export const WHOLE_ORDER = '';
+
+/** Vorgabezeiten der Display-Verheiratung stehen mit diesem Präfix am Artikel (Gesamtmontage ohne Präfix). */
+export const DISPLAY_PREFIX = 'display:';
+
+/** Schlüssel einer Vorgabezeit am Artikel für Teil und Schritt */
+export function targetKey(section: Section | null | undefined, step: string): string {
+  return section === 'display' ? DISPLAY_PREFIX + step : step;
+}
+
+/** Artikel mit den Vorgabezeiten nur dieses Teils (Schlüssel = Schrittname) – für alle Vergleiche */
+export function articleForSection<A extends Article | null | undefined>(article: A, section: Section | null | undefined): A {
+  if (!article) return article;
+  const all = Object.entries(article.targets ?? {});
+  const targets =
+    section === 'display'
+      ? Object.fromEntries(all.filter(([k]) => k.startsWith(DISPLAY_PREFIX)).map(([k, v]) => [k.slice(DISPLAY_PREFIX.length), v]))
+      : Object.fromEntries(all.filter(([k]) => !k.startsWith(DISPLAY_PREFIX)));
+  return { ...article, targets };
+}
 
 const MIN = 60_000;
 
@@ -135,22 +154,31 @@ export function teamPraise(me: string, people: { id: string; actualMs: Millis; t
  */
 export function sameOrder(a: Job, b: Job): boolean {
   if (a.kind !== 'order' || b.kind !== 'order' || a.id === b.id) return false;
+  // Display-Verheiratung und Gesamtmontage sind eigenständige Aufträge
+  if ((a.section === 'display') !== (b.section === 'display')) return false;
   if (a.orderNo && b.orderNo) return a.orderNo === b.orderNo;
   if (!a.articleId || a.articleId !== b.articleId) return false;
   const end = (j: Job) => j.finishedAt ?? Number.MAX_SAFE_INTEGER;
   return a.startedAt < end(b) && b.startedAt < end(a);
 }
 
-/** Artikel für den Vorgabe-Vergleich eines gemeinsamen Auftrags: der eigene, sonst der erste mit Vorgabezeiten. */
+/**
+ * Artikel für den Vorgabe-Vergleich eines gemeinsamen Auftrags: der eigene, sonst der erste mit Vorgabezeiten –
+ * mit den Vorgabezeiten des Teils (Display-Verheiratung / Gesamtmontage) des ersten Auftrags.
+ */
 export function orderArticle(jobs: Job[], byId: Map<string, Article>): Article | undefined {
-  const all = jobs.map((j) => (j.articleId ? byId.get(j.articleId) : undefined)).filter((a): a is Article => !!a);
+  const section = jobs[0]?.section ?? null;
+  const all = jobs
+    .map((j) => articleForSection(j.articleId ? byId.get(j.articleId) : undefined, section))
+    .filter((a): a is Article => !!a);
   const hasTargets = (a: Article) => Object.keys(a.targets ?? {}).length > 0;
   return all[0] && hasTargets(all[0]) ? all[0] : (all.find(hasTargets) ?? all[0]);
 }
 
 /** Schlüssel zum Zusammenfassen mehrerer Timer eines Auftrags */
 export function orderKey(job: Job): string {
-  return job.orderNo ? `${job.orderNo}|${job.articleId ?? ''}` : `job:${job.id}`;
+  const base = job.orderNo ? `${job.orderNo}|${job.articleId ?? ''}` : `job:${job.id}`;
+  return job.section === 'display' ? `${base}|display` : base;
 }
 
 /**

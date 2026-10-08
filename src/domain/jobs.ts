@@ -1,3 +1,4 @@
+import { SECTION_SHORT } from './flows';
 import { effectiveEnd } from './time';
 import type { Article, Entry, Job, Millis, Segment } from './types';
 
@@ -82,11 +83,12 @@ export function jobTitle(job: Pick<Job, 'orderNo' | 'kind'>): string {
  * Ohne Benennung wird die Artikelnummer genommen; Nacharbeit bekommt „Nacharbeit · “ davor.
  */
 export function jobName(
-  job: Pick<Job, 'orderNo' | 'kind'>,
+  job: Pick<Job, 'orderNo' | 'kind'> & { section?: Job['section'] },
   article?: Pick<Article, 'number' | 'name'> | null,
 ): string {
   const articlePart = article ? article.name.trim() || article.number : '';
-  const parts = [job.orderNo, articlePart].filter((s): s is string => !!s);
+  const sectionPart = job.kind === 'order' && job.section ? SECTION_SHORT[job.section] : '';
+  const parts = [job.orderNo, articlePart, sectionPart].filter((s): s is string => !!s);
   if (job.kind === 'rework') return ['Nacharbeit', ...parts].join(' · ');
   return parts.length ? parts.join(' · ') : 'Ohne Auftragsnummer';
 }

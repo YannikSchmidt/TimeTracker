@@ -10,7 +10,7 @@ import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
 import { DEFAULT_CODE_PATTERNS } from '../../domain/codes';
 import { jobsToCsv } from '../../domain/export';
-import { compareJob } from '../../domain/targets';
+import { articleForSection, compareJob } from '../../domain/targets';
 import type { Dimension } from '../../domain/types';
 import { useDimensions, type DimensionsData } from '../../hooks/useDimensions';
 import { useGroups } from '../../hooks/useGroups';
@@ -68,7 +68,8 @@ export default function SettingsScreen() {
     const byId = new Map(articles.map((a) => [a.id, a]));
     const targetOf = (job: (typeof jobs)[number]) => {
       const article = job.articleId ? byId.get(job.articleId) : undefined;
-      return compareJob(job, entries.filter((e) => e.jobId === job.id), article, groups.flowOf(article).steps, Date.now()).targetMs;
+      const flow = groups.flowOf(article, job.section ?? null);
+      return compareJob(job, entries.filter((e) => e.jobId === job.id), articleForSection(article, job.section), flow.steps, Date.now()).targetMs;
     };
     const csv = '\uFEFF' + jobsToCsv(jobs, entries, dims.dimensions, dims.values, articles, Date.now(), targetOf);
     setStatus(await shareTextFile(`auftraege-${stamp()}.csv`, csv, 'text/csv'));

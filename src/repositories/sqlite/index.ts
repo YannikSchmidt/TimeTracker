@@ -118,11 +118,12 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
         for (const a of data.articles) {
           if (articleIdMap.get(a.id) !== a.id) continue;
           await db.runAsync(
-            `INSERT INTO articles (id, number, name, device, group_id, targets, created_at, updated_at, deleted_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO articles (id, number, name, device, group_id, targets, no_sections, created_at, updated_at, deleted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET number = excluded.number, name = excluded.name, device = excluded.device,
-               group_id = excluded.group_id, targets = excluded.targets, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
-            a.id, a.number, a.name, a.device, a.groupId, JSON.stringify(a.targets ?? {}), a.createdAt, a.updatedAt, a.deletedAt,
+               group_id = excluded.group_id, targets = excluded.targets, no_sections = excluded.no_sections,
+               updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
+            a.id, a.number, a.name, a.device, a.groupId, JSON.stringify(a.targets ?? {}), a.noSections ? 1 : 0, a.createdAt, a.updatedAt, a.deletedAt,
           );
         }
         for (const j of data.jobs) {
@@ -130,16 +131,17 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
           const status = localRunning && j.status === 'running' ? 'paused' : j.status;
           await db.runAsync(
             `INSERT INTO jobs (id, kind, status, article_id, order_no, quantity, note, parent_job_id, rework_reason,
-                               started_at, finished_at, current_step, only_step, workers, created_at, updated_at, deleted_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               started_at, finished_at, current_step, only_step, workers, section, created_at, updated_at, deleted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, status = excluded.status, article_id = excluded.article_id,
                order_no = excluded.order_no, quantity = excluded.quantity, note = excluded.note,
                parent_job_id = excluded.parent_job_id, rework_reason = excluded.rework_reason,
                started_at = excluded.started_at, finished_at = excluded.finished_at,
                current_step = excluded.current_step, only_step = excluded.only_step, workers = excluded.workers,
+               section = excluded.section,
                updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
             j.id, j.kind, status, articleId, j.orderNo, j.quantity, j.note ?? '', j.parentJobId, j.reworkReason,
-            j.startedAt, j.finishedAt, j.currentStep, j.onlyStep, j.workers ?? 1, j.createdAt, j.updatedAt, j.deletedAt,
+            j.startedAt, j.finishedAt, j.currentStep, j.onlyStep, j.workers ?? 1, j.section ?? null, j.createdAt, j.updatedAt, j.deletedAt,
           );
           await db.runAsync('DELETE FROM job_values WHERE job_id = ?', j.id);
           for (const valueId of j.valueIds ?? []) {
@@ -148,12 +150,12 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
         }
         for (const g of data.groups ?? []) {
           await db.runAsync(
-            `INSERT INTO product_groups (id, main, name, parent_id, steps, created_at, updated_at, deleted_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET name = excluded.name, steps = excluded.steps,
+            `INSERT INTO product_groups (id, main, name, parent_id, steps, display_steps, created_at, updated_at, deleted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET name = excluded.name, steps = excluded.steps, display_steps = excluded.display_steps,
                updated_at = excluded.updated_at, deleted_at = excluded.deleted_at
              WHERE excluded.updated_at >= product_groups.updated_at`,
-            g.id, g.main, g.name, g.parentId, JSON.stringify(g.steps), g.createdAt, g.updatedAt, g.deletedAt,
+            g.id, g.main, g.name, g.parentId, JSON.stringify(g.steps), JSON.stringify(g.displaySteps ?? []), g.createdAt, g.updatedAt, g.deletedAt,
           );
         }
         for (const e of data.entries) {

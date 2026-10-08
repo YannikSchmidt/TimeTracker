@@ -1,6 +1,6 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { DeleteAction } from '../../components/DeleteAction';
 import { GroupPicker } from '../../components/GroupPicker';
@@ -8,7 +8,9 @@ import { TargetsEditor } from '../../components/TargetsEditor';
 import { ScanButton } from '../../components/ScanButton';
 import { Button, Card, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
-import type { StepTarget } from '../../domain/targets';
+import { SECTION_LABEL } from '../../domain/flows';
+import { DISPLAY_PREFIX, type StepTarget } from '../../domain/targets';
+import type { Article } from '../../domain/types';
 import { articleLabel } from '../../hooks/useArticles';
 import { useGroups } from '../../hooks/useGroups';
 import { radius, spacing, usePalette } from '../../theme';
@@ -26,6 +28,7 @@ export default function ArticleScreen() {
   const [device, setDevice] = useState('');
   const [groupId, setGroupId] = useState<string | null>(null);
   const [targets, setTargets] = useState<Record<string, StepTarget>>({});
+  const [noSections, setNoSections] = useState(false);
   const groups = useGroups();
   const { data: settings } = useQuery((r) => r.settings.get());
   const [loaded, setLoaded] = useState(isNew);
@@ -37,12 +40,13 @@ export default function ArticleScreen() {
     setDevice(article.device);
     setGroupId(article.groupId);
     setTargets(article.targets ?? {});
+    setNoSections(!!article.noSections);
     setLoaded(true);
   }
 
   const save = async () => {
     try {
-      const input = { number, name, device, groupId, targets };
+      const input = { number, name, device, groupId, targets, noSections };
       await mutate(async (r) => {
         if (isNew) await r.articles.create(input);
         else await r.articles.update(id, input);
@@ -55,6 +59,11 @@ export default function ArticleScreen() {
 
 
   if (!loaded) return null;
+
+  const draft: Article = { id: '', number, name, device, groupId, targets, createdAt: 0, updatedAt: 0, deletedAt: null };
+  // Gesamtgerät: Display-Verheiratung und Gesamtmontage mit eigenem Ablauf und eigenen Vorgabezeiten
+  const isDevice = groups.hasSections(draft);
+  const split = isDevice && !noSections;
 
   const inputStyle = [styles.input, { color: p.text, borderColor: p.border, backgroundColor: p.card }];
 
@@ -112,10 +121,28 @@ export default function ArticleScreen() {
           <SectionTitle>Gruppe</SectionTitle>
           <GroupPicker number={number} groupId={groupId} onChange={setGroupId} />
         </View>
-        <View>
+        {isDevice && (
+          <View style={styles.switchRow}>
+            <Text style={{ color: p.text, flex: 1 }}>In Display-Verheiratung und Gesamtmontage aufteilen</Text>
+            <Switch value={!noSections} onValueChange={(v) => setNoSections(!v)} accessibilityLabel="In Display-Verheiratung und Gesamtmontage aufteilen" />
+          </View>
+        )}
+        <View style={{ gap: spacing.sm }}>
           <SectionTitle>Vorgabezeiten</SectionTitle>
+          {split && <Text style={[styles.partTitle, { color: p.text }]}>{SECTION_LABEL.display}</Text>}
+          {split && (
+            <TargetsEditor
+              steps={groups.flowOf(draft, 'display').steps}
+              targets={targets}
+              onChange={setTargets}
+              exampleQuantity={settings?.defaultQuantity ?? 24}
+              keyPrefix={DISPLAY_PREFIX}
+              labelPrefix="Display "
+            />
+          )}
+          {split && <Text style={[styles.partTitle, { color: p.text }]}>{SECTION_LABEL.assembly}</Text>}
           <TargetsEditor
-            steps={groups.flowOf({ id: '', number, name, device, groupId, targets, createdAt: 0, updatedAt: 0, deletedAt: null }).steps}
+            steps={groups.flowOf(draft, split ? 'assembly' : null).steps}
             targets={targets}
             onChange={setTargets}
             exampleQuantity={settings?.defaultQuantity ?? 24}
@@ -142,6 +169,8 @@ export default function ArticleScreen() {
 }
 
 const styles = StyleSheet.create({
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  partTitle: { fontWeight: '700', fontSize: 15 },
   container: { padding: spacing.lg, gap: spacing.lg },
   row: { flexDirection: 'row', gap: spacing.sm },
   input: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing.md, minHeight: 48, fontSize: 16 },

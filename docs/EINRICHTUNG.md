@@ -111,6 +111,22 @@ ganzen Ablaufs „Nur <Schritt>“ wählen (z.B. beim Aushelfen).
 Der Knopf **„Schritt“** neben Pause/Fertig öffnet eine Auswahl: alle Schritte des Ablaufs und alle, die für diesen
 Artikel schon verwendet wurden, dazu ein Feld für einen neuen Schritt. Ab der Auswahl wird die Zeit auf diesen Schritt
 gebucht – auch für Artikel ohne Ablauf. Neue Schritte stehen beim nächsten Auftrag mit demselben Artikel zur Auswahl.
+Lief seit dem Start bzw. dem letzten Schrittwechsel schon Zeit (ab 1 Minute), fragt die App: „Bisherige Zeit (25m seit
+dem Start) auch zu ‚Teile holen‘ zählen?“ – **Ja, übernehmen** ordnet diese Zeit dem gewählten Schritt zu, **Nein, ab
+jetzt** zählt erst ab jetzt.
+
+### Gesamtgeräte: Display-Verheiratung und Gesamtmontage
+
+Gesamtgeräte (07…) werden in zwei **eigenständige Aufträge** aufgeteilt:
+- Beim Start fragt die App nach dem Artikel-Scan: **Display-Verheiratung oder Gesamtmontage?**
+- Jeder Teil hat einen **eigenen Ablauf** (*Abläufe & Untergruppen bearbeiten* → Gesamtgeräte: „Display-Verheiratung“
+  und „Gesamtmontage“, je Haupt- und Untergruppe) und **eigene Vorgabezeiten** (im Artikel je Teil).
+- Kachel, Auftrag und Statistik zeigen den Teil; in der Statistik sind „Display“ und „Gesamtmontage“ getrennt. Arbeiten
+  mehrere Personen am selben Auftrag, wird nur innerhalb desselben Teils zusammengezählt.
+- Wer beide Teile macht: nach „Fertig“ **Weiter mit Gesamtmontage** (bzw. Display-Verheiratung) – startet den anderen
+  Teil mit Auftrag, Artikel und Stückzahl.
+- Artikel, die nicht aufgeteilt werden, im Artikel mit dem Schalter „In Display-Verheiratung und Gesamtmontage
+  aufteilen“ ausschalten – dann gibt es keine Frage und der bisherige Ablauf (= Gesamtmontage) gilt.
 
 ## Scannen
 

@@ -13,6 +13,7 @@ interface ArticleRow {
   device: string;
   group_id: string | null;
   targets: string | null;
+  no_sections: number | null;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
@@ -25,6 +26,7 @@ const toArticle = (r: ArticleRow): Article => ({
   device: r.device,
   groupId: r.group_id ?? null,
   targets: r.targets ? (JSON.parse(r.targets) as Article['targets']) : {},
+  noSections: !!r.no_sections,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
   deletedAt: r.deleted_at,
@@ -65,18 +67,20 @@ export class SqliteArticleRepository implements ArticleRepository {
       device: input.device.trim(),
       groupId: input.groupId ?? null,
       targets: cleanTargets(input.targets ?? {}),
+      noSections: !!input.noSections,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
     };
     await this.db.runAsync(
-      'INSERT INTO articles (id, number, name, device, group_id, targets, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO articles (id, number, name, device, group_id, targets, no_sections, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       article.id,
       article.number,
       article.name,
       article.device,
       article.groupId,
       JSON.stringify(article.targets),
+      article.noSections ? 1 : 0,
       now,
       now,
     );
@@ -90,12 +94,13 @@ export class SqliteArticleRepository implements ArticleRepository {
     const other = number ? await this.findByNumber(number) : null;
     if (other && other.id !== id) throw duplicateArticleError(number);
     await this.db.runAsync(
-      'UPDATE articles SET number = ?, name = ?, device = ?, group_id = ?, targets = ?, updated_at = ? WHERE id = ?',
+      'UPDATE articles SET number = ?, name = ?, device = ?, group_id = ?, targets = ?, no_sections = ?, updated_at = ? WHERE id = ?',
       number,
       (input.name ?? current.name).trim(),
       (input.device ?? current.device).trim(),
       input.groupId === undefined ? current.groupId : input.groupId,
       JSON.stringify(input.targets === undefined ? current.targets : cleanTargets(input.targets)),
+      (input.noSections === undefined ? current.noSections : input.noSections) ? 1 : 0,
       Date.now(),
       id,
     );

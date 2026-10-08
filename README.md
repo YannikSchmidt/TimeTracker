@@ -24,7 +24,12 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
   (z.B. Teile holen → Gesamtmontage → Prüfen). Im Timer schließt „Schritt fertig“ den Schritt ab und startet den
   nächsten; die Zeit pro Schritt steht im Auftrag. Beim Start kann auch nur ein einzelner Schritt getrackt werden.
   Der Knopf **„Schritt“** neben Pause/Fertig wechselt jederzeit auf einen beliebigen Schritt – Auswahl aus dem Ablauf
-  und den schon verwendeten Schritten des Artikels, oder einen neuen eingeben.
+  und den schon verwendeten Schritten des Artikels, oder einen neuen eingeben. Lief schon Zeit seit dem Start bzw. dem
+  letzten Wechsel, fragt die App, ob diese Zeit auch zum gewählten Schritt zählen soll.
+- **Gesamtgeräte in zwei Teilen**: Nach dem Scan eines Gesamtgeräts fragt die App „Display-Verheiratung oder
+  Gesamtmontage?“. Beide Teile sind eigenständige Aufträge mit eigenem Ablauf, eigenen Vorgabezeiten und eigenem
+  Eintrag in der Statistik. Wer beides macht, startet nach „Fertig“ direkt mit „Weiter mit Gesamtmontage“ den anderen
+  Teil. Pro Artikel abschaltbar („In Display-Verheiratung und Gesamtmontage aufteilen“).
 - **Vorgabe gegen Ist**: Pro Artikel und Arbeitsschritt Rüstzeit (einmal pro Auftrag) und Einzelzeit (pro Stück) in
   Minuten. Die Kachel zeigt die Vorgabe, der Auftrag Ist/Soll/Bilanz je Schritt, die Statistik die Arbeitsbilanz,
   jeden Auftrag einzeln (Ist- und Soll-Balken, Anteil bei Zusammenarbeit) und den Vergleich je Untergruppe und Artikel

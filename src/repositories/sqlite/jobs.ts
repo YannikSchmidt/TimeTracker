@@ -20,6 +20,7 @@ interface JobRow {
   current_step: string | null;
   only_step: string | null;
   workers: number | null;
+  section: Job['section'] | undefined;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
@@ -44,6 +45,7 @@ function toJob(row: JobRow, valueIds: string[]): Job {
     currentStep: row.current_step ?? null,
     onlyStep: row.only_step ?? null,
     workers: row.workers ?? 1,
+    section: row.section ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
@@ -143,14 +145,15 @@ export class SqliteJobRepository implements JobRepository {
       currentStep: input.onlyStep ?? input.currentStep ?? null,
       onlyStep: input.onlyStep ?? null,
       workers: Math.min(20, Math.max(1, Math.round(input.workers ?? 1))),
+      section: input.section ?? null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
     };
     await this.db.runAsync(
       `INSERT INTO jobs (id, kind, status, article_id, order_no, quantity, note, parent_job_id, rework_reason,
-                         started_at, finished_at, current_step, only_step, workers, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                         started_at, finished_at, current_step, only_step, workers, section, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       job.id,
       job.kind,
       job.status,
@@ -165,6 +168,7 @@ export class SqliteJobRepository implements JobRepository {
       job.currentStep,
       job.onlyStep,
       job.workers ?? 1,
+      job.section ?? null,
       now,
       now,
     );
@@ -213,6 +217,23 @@ export class SqliteJobRepository implements JobRepository {
         await this.openEntry(id, now, next, job.workers ?? 1);
         await this.db.runAsync("UPDATE jobs SET status = 'running' WHERE id = ?", id);
       }
+    });
+  }
+
+  async relabelStep(id: string, step: string): Promise<void> {
+    const job = await this.require(id);
+    const now = Date.now();
+    const rows = await this.db.getAllAsync<{ id: string; step: string | null }>(
+      'SELECT id, step FROM entries WHERE job_id = ? AND deleted_at IS NULL ORDER BY start_at',
+      id,
+    );
+    const from = job.currentStep ?? null;
+    await this.db.withTransactionAsync(async () => {
+      for (let i = rows.length - 1; i >= 0 && (rows[i].step ?? null) === from; i--) {
+        await this.db.runAsync('UPDATE entries SET step = ?, updated_at = ? WHERE id = ?', step, now, rows[i].id);
+      }
+      await this.db.runAsync('UPDATE jobs SET current_step = ?, updated_at = ? WHERE id = ?', step, now, id);
+      if (job.onlyStep) await this.db.runAsync('UPDATE jobs SET only_step = ? WHERE id = ?', step, id);
     });
   }
 

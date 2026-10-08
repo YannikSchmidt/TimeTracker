@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { jobName, jobTimes } from '../domain/jobs';
-import { entryMs } from '../domain/flows';
+import { entryMs, SECTION_SHORT, timeSinceStepChange } from '../domain/flows';
 import { compareShare, stepTargetMs } from '../domain/targets';
 import { formatClock, formatDuration } from '../domain/time';
 import type { Article, Entry, Job } from '../domain/types';
@@ -99,6 +99,11 @@ export function JobCard({
                 <Text style={{ color, fontWeight: '700', fontSize: 12 }}>{job.orderNo}</Text>
               </View>
             ) : null}
+            {job.kind === 'order' && job.section ? (
+              <View style={[styles.pill, { backgroundColor: p.primary + '1f' }]}>
+                <Text style={{ color: p.primary, fontWeight: '700', fontSize: 12 }}>{SECTION_SHORT[job.section].toUpperCase()}</Text>
+              </View>
+            ) : null}
             <View style={{ flex: 1 }} />
             <Ionicons name="chevron-forward" size={18} color={p.muted} />
           </View>
@@ -184,10 +189,11 @@ export function JobCard({
             title={`Arbeitsschritt · ${name}`}
             current={step}
             choices={stepChoices}
+            sinceMs={timeSinceStepChange(entries, job.currentStep, now).ms}
             onClose={() => setPicking(false)}
-            onPick={(s) => {
+            onPick={(s, takeOver) => {
               setPicking(false);
-              void actions.switchStep(job, s);
+              void (takeOver ? actions.takeOverStep(job, s) : actions.switchStep(job, s));
             }}
           />
         )}
