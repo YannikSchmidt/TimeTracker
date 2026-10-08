@@ -47,6 +47,11 @@ export interface JobRepository {
    */
   relabelStep(id: string, step: string): Promise<void>;
   /**
+   * Schritt umbenennen – nur in den eigenen Aufträgen: allen dieses Artikels und Teils, ohne Artikel nur in `jobId`.
+   * Betrifft Abschnitte sowie aktuellen bzw. Einzelschritt.
+   */
+  renameStep(scope: { articleId: string | null; section: Job['section']; jobId: string }, from: string, to: string): Promise<void>;
+  /**
    * Personenzähler ändern. Läuft der Auftrag, endet der aktuelle Abschnitt jetzt und ein neuer mit der
    * neuen Anzahl beginnt – so zählt jede Zeitspanne mit der richtigen Personenzahl.
    */
@@ -66,7 +71,8 @@ export interface EntryRepository {
   listInRange(start: Millis, end: Millis): Promise<Entry[]>;
   listAll(): Promise<Entry[]>;
   get(id: string): Promise<Entry | null>;
-  update(id: string, input: { startAt?: Millis; endAt?: Millis | null }): Promise<void>;
+  /** Start/Ende bzw. Arbeitsschritt korrigieren; beim laufenden Abschnitt wechselt auch der Schritt des Auftrags. */
+  update(id: string, input: { startAt?: Millis; endAt?: Millis | null; step?: string | null }): Promise<void>;
   remove(id: string): Promise<void>;
 }
 
@@ -91,6 +97,8 @@ export interface ArticleInput {
   targets?: Article['targets'];
   /** Gesamtgerät nicht in Display-Verheiratung und Gesamtmontage aufteilen */
   noSections?: boolean;
+  /** In der Schritt-Auswahl ausgeblendete Schritte (Display mit Präfix „display:“) */
+  hiddenSteps?: string[];
 }
 
 export interface GroupRepository {

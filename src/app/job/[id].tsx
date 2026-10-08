@@ -359,16 +359,19 @@ export default function JobScreen() {
             <Pressable
               key={e.id}
               accessibilityRole="button"
+              accessibilityLabel={`Abschnitt ${formatTime(e.startAt)}${e.step ? ` ${e.step}` : ''} bearbeiten`}
               disabled={readOnly}
               onPress={() => router.push(`/entry/${e.id}`)}
               style={styles.listRow}
             >
-              <Text style={{ color: p.text, flex: 1 }}>
+              <Text style={{ color: p.text, flex: 1 }} numberOfLines={1}>
                 {formatTime(e.startAt)} – {e.endAt ? formatTime(e.endAt) : 'läuft'}
+                {e.step ? <Text style={{ color: p.muted }}>{`  ·  ${e.step}`}</Text> : null}
               </Text>
               <Text style={{ color: p.muted }}>{formatDuration((e.endAt ?? now) - e.startAt)}</Text>
             </Pressable>
           ))}
+          {!readOnly && <Text style={{ color: p.muted, fontSize: 12 }}>Antippen, um Zeit oder Schritt zu ändern oder den Abschnitt zu löschen.</Text>}
         </Card>
       )}
 

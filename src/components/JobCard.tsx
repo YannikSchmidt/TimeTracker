@@ -190,10 +190,14 @@ export function JobCard({
             current={step}
             choices={stepChoices}
             sinceMs={timeSinceStepChange(entries, job.currentStep, now).ms}
+            flowSteps={steps}
+            canHide={!!article}
+            onRename={(from, to) => void actions.renameStep(job, article, from, to)}
+            onHide={(s) => article && void actions.hideStep(job, article, s)}
             onClose={() => setPicking(false)}
             onPick={(s, takeOver) => {
               setPicking(false);
-              void (takeOver ? actions.takeOverStep(job, s) : actions.switchStep(job, s));
+              void (takeOver ? actions.takeOverStep(job, s, article) : actions.switchStep(job, s, article));
             }}
           />
         )}

@@ -115,6 +115,13 @@ Lief seit dem Start bzw. dem letzten Schrittwechsel schon Zeit (ab 1 Minute), fr
 dem Start) auch zu ‚Teile holen‘ zählen?“ – **Ja, übernehmen** ordnet diese Zeit dem gewählten Schritt zu, **Nein, ab
 jetzt** zählt erst ab jetzt.
 
+**Schritte korrigieren:**
+- In der Schritt-Auswahl oben **„Bearbeiten“**: früher verwendete Schritte **umbenennen** (Stift – ändert den Namen in
+  deinen Aufträgen mit diesem Artikel) oder **entfernen** (Papierkorb – blendet ihn in der Auswahl aus, gebuchte
+  Zeiten bleiben). Schritte aus dem Ablauf werden unter *Abläufe & Untergruppen bearbeiten* geändert.
+- Im Auftrag unter **Arbeitsabschnitte** steht bei jedem Abschnitt der Schritt. Antippen → Start/Ende und
+  **Arbeitsschritt** ändern oder den Abschnitt löschen (Admin direkt, sonst als Löschvorschlag).
+
 ### Gesamtgeräte: Display-Verheiratung und Gesamtmontage
 
 Gesamtgeräte (07…) werden in zwei **eigenständige Aufträge** aufgeteilt:

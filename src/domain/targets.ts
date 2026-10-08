@@ -19,6 +19,14 @@ export function targetKey(section: Section | null | undefined, step: string): st
   return section === 'display' ? DISPLAY_PREFIX + step : step;
 }
 
+/** Ausgeblendete Schritte eines Artikels für einen Teil (ohne Präfix) */
+export function hiddenStepsFor(article: Article | null | undefined, section: Section | null | undefined): string[] {
+  const all = article?.hiddenSteps ?? [];
+  return section === 'display'
+    ? all.filter((k) => k.startsWith(DISPLAY_PREFIX)).map((k) => k.slice(DISPLAY_PREFIX.length))
+    : all.filter((k) => !k.startsWith(DISPLAY_PREFIX));
+}
+
 /** Artikel mit den Vorgabezeiten nur dieses Teils (Schlüssel = Schrittname) – für alle Vergleiche */
 export function articleForSection<A extends Article | null | undefined>(article: A, section: Section | null | undefined): A {
   if (!article) return article;

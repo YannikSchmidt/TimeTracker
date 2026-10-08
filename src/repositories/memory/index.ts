@@ -254,6 +254,22 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         if (j.onlyStep) j.onlyStep = step;
         changed();
       },
+      async renameStep(scope, from, to) {
+        const name = to.trim();
+        if (!name || name === from) return;
+        const t = now();
+        const display = (j: Job) => j.section === 'display';
+        const own = liveJobs().filter((j) =>
+          scope.articleId ? j.articleId === scope.articleId && display(j) === (scope.section === 'display') : j.id === scope.jobId,
+        );
+        const ids = new Set(own.map((j) => j.id));
+        for (const e of entries) if (ids.has(e.jobId) && !e.deletedAt && e.step === from) Object.assign(e, { step: name, updatedAt: t });
+        for (const j of own) {
+          if (j.currentStep === from) Object.assign(j, { currentStep: name, updatedAt: t });
+          if (j.onlyStep === from) Object.assign(j, { onlyStep: name, updatedAt: t });
+        }
+        changed();
+      },
       async setWorkers(id, n) {
         const j = findJob(id);
         const workers = clampWorkers(n);
@@ -333,7 +349,18 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         const startAt = input.startAt ?? e.startAt;
         const endAt = input.endAt === undefined ? e.endAt : input.endAt;
         validateTimes(startAt, endAt);
-        Object.assign(e, { startAt, endAt, updatedAt: now() });
+        const t = now();
+        Object.assign(e, { startAt, endAt, updatedAt: t });
+        if (input.step !== undefined) {
+          const step = input.step?.trim() || null;
+          e.step = step;
+          // laufender Abschnitt: der Auftrag arbeitet ab jetzt in diesem Schritt weiter
+          const j = jobs.find((x) => x.id === e.jobId);
+          if (j && e.endAt === null) {
+            Object.assign(j, { currentStep: step, updatedAt: t });
+            if (j.onlyStep && step) j.onlyStep = step;
+          }
+        }
         syncJobBounds(e.jobId);
         changed();
       },
@@ -432,6 +459,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
           groupId: input.groupId === undefined ? a.groupId : input.groupId,
           targets: input.targets === undefined ? a.targets : cleanTargets(input.targets),
           noSections: input.noSections === undefined ? (a.noSections ?? false) : input.noSections,
+          hiddenSteps: input.hiddenSteps === undefined ? (a.hiddenSteps ?? []) : [...new Set(input.hiddenSteps)],
           updatedAt: now(),
           updatedBy: owner(),
         });

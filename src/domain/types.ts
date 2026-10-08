@@ -88,6 +88,8 @@ export interface Article extends SyncMeta {
   targets: Record<string, { setup: number; perPiece: number }>;
   /** Gesamtgerät ohne Aufteilung in Display-Verheiratung und Gesamtmontage (keine Abfrage beim Start) */
   noSections?: boolean;
+  /** In der Schritt-Auswahl ausgeblendete, früher verwendete Schritte (Display-Schritte mit Präfix „display:“) */
+  hiddenSteps?: string[];
   /** Wer den Artikel zuletzt geändert hat (Team-Sync) */
   updatedBy?: string | null;
 }
