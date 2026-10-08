@@ -37,7 +37,7 @@ export interface JobRepository {
   finish(id: string, extra?: { reworkReason?: string | null }): Promise<void>;
   /**
    * Arbeitsschritt abschließen und zum nächsten wechseln: Der laufende Abschnitt endet jetzt,
-   * läuft der Auftrag, beginnt sofort ein neuer Abschnitt mit dem nächsten Schritt.
+   * läuft der Auftrag, beginnt sofort ein neuer Abschnitt mit dem nächsten Schritt (null = ohne Schritt, „Schritt beendet“).
    * Auch für den freien Wechsel per Schritt-Knopf; bei Einzelschritt-Timern wird der Schritt zum neuen Einzelschritt.
    */
   nextStep(id: string, next: string | null): Promise<void>;
@@ -46,6 +46,10 @@ export interface JobRepository {
    * Wechsel bzw. seit dem Start) zählen ab jetzt zu `step`; der laufende Abschnitt läuft weiter.
    */
   relabelStep(id: string, step: string): Promise<void>;
+  /** Ganze Arbeitszeit des Auftrags zählt zu diesem Schritt (Schritt-Uhr = Arbeitszeit). */
+  assignAllToStep(id: string, step: string): Promise<void>;
+  /** Zeit dieses Schritts freigeben (wird „ohne Schritt“); war er aktiv, läuft der Timer ohne Schritt weiter. */
+  clearStep(id: string, step: string): Promise<void>;
   /**
    * Schritt umbenennen – nur in den eigenen Aufträgen: allen dieses Artikels und Teils, ohne Artikel nur in `jobId`.
    * Betrifft Abschnitte sowie aktuellen bzw. Einzelschritt.

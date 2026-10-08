@@ -11,6 +11,7 @@ import type { Article, Entry, Job } from '../domain/types';
 import { articleDetails } from '../hooks/useArticles';
 import { useJobActions } from '../hooks/useJobActions';
 import { orderColor, radius, spacing, usePalette } from '../theme';
+import { StepMenu } from './StepMenu';
 import { StepPicker } from './StepPicker';
 import { Button } from './ui';
 import { WorkersStepper } from './WorkersStepper';
@@ -53,6 +54,7 @@ export function JobCard({
   const p = usePalette();
   const actions = useJobActions();
   const [picking, setPicking] = useState(false);
+  const [stepMenu, setStepMenu] = useState(false);
   const t = jobTimes(job, entries, now);
   const running = job.status === 'running';
   const rework = job.kind === 'rework';
@@ -68,6 +70,9 @@ export function JobCard({
   const personMs = entries.filter((e) => !e.deletedAt).reduce((s, e) => s + entryMs(e, now, true), 0);
   const stepTarget = step ? stepTargetMs(targetArticle, step, job.quantity) : null;
   const stepTime = step ? entries.filter((e) => e.step === step && !e.deletedAt).reduce((s, e) => s + ((e.endAt ?? now) - e.startAt), 0) : 0;
+  const otherStepsMs = entries.filter((e) => e.step && e.step !== step && !e.deletedAt).reduce((s, e) => s + ((e.endAt ?? now) - e.startAt), 0);
+  // Schritt beendet, nächster noch nicht gewählt: die Zeit seitdem zählt zum nächsten Schritt
+  const endedSteps = job.kind === 'order' && !step && entries.some((e) => e.step && !e.deletedAt);
   const details = [...(article ? articleDetails(article) : []), job.quantity != null ? `${job.quantity} Stk` : '']
     .filter(Boolean)
     .join(' · ');
@@ -140,21 +145,37 @@ export function JobCard({
             {cmp?.targetMs ? ' – Vorgabe wird nach geleisteter Zeit aufgeteilt' : ''}
           </Text>
         )}
+        {!step && endedSteps && (
+          <View style={[styles.step, { backgroundColor: color + '0d', borderColor: color + '55' }]}>
+            <Text style={{ color: p.muted, fontSize: 12 }}>Kein Schritt aktiv – seit {formatClock(timeSinceStepChange(entries, null, now).ms)}</Text>
+            <Button
+              title="Nächster Schritt"
+              icon="list"
+              onPress={() => setPicking(true)}
+              accessibilityLabel={`Nächsten Schritt für ${name} wählen`}
+            />
+          </View>
+        )}
         {step && (
           <View style={[styles.step, { backgroundColor: color + '14', borderColor: color + '55' }]}>
-            <Text style={{ color: p.muted, fontSize: 12 }}>
-              {job.onlyStep ? 'Einzelschritt (nicht der ganze Ablauf)' : stepIndex >= 0 ? `Schritt ${stepIndex + 1} von ${steps.length}` : 'Schritt'}
-            </Text>
-            <View style={styles.stepRow}>
-              <Text style={{ color: p.text, fontSize: 18, fontWeight: '700', flex: 1 }} numberOfLines={1}>
-                {step}
+            {/* Name und Schritt-Uhr antippen → Menü zum Korrigieren */}
+            <Pressable accessibilityRole="button" accessibilityLabel={`Schritt ${step} bearbeiten`} onPress={() => setStepMenu(true)} style={{ gap: 2 }}>
+              <Text style={{ color: p.muted, fontSize: 12 }}>
+                {job.onlyStep ? 'Einzelschritt (nicht der ganze Ablauf)' : stepIndex >= 0 ? `Schritt ${stepIndex + 1} von ${steps.length}` : 'Schritt'}
+                {'  ·  antippen zum Korrigieren'}
               </Text>
-              <Text style={{ color: stepTarget && stepTime > stepTarget ? p.danger : p.muted, fontVariant: ['tabular-nums'] }}>
-                {formatClock(stepTime)}
-                {stepTarget ? ` / ${formatDuration(stepTarget)}` : ''}
-              </Text>
-            </View>
-            {next && (
+              <View style={styles.stepRow}>
+                <Text style={{ color: p.text, fontSize: 18, fontWeight: '700', flex: 1 }} numberOfLines={1}>
+                  {step}
+                </Text>
+                <Text style={{ color: stepTarget && stepTime > stepTarget ? p.danger : p.muted, fontVariant: ['tabular-nums'] }}>
+                  {formatClock(stepTime)}
+                  {stepTarget ? ` / ${formatDuration(stepTarget)}` : ''}
+                </Text>
+                <Ionicons name="create-outline" size={18} color={p.muted} />
+              </View>
+            </Pressable>
+            {next ? (
               <Button
                 title={`${step} fertig → ${next}`}
                 icon="checkmark-done"
@@ -162,8 +183,32 @@ export function JobCard({
                 onPress={() => void actions.nextStep(job, next)}
                 accessibilityLabel={`${step} fertig, weiter mit ${next}`}
               />
+            ) : (
+              <Button title="Schritt beendet" icon="checkmark-done" variant="secondary" onPress={() => void actions.endStep(job)} accessibilityLabel={`${step} beendet`} />
             )}
           </View>
+        )}
+        {step && (
+          <StepMenu
+            visible={stepMenu}
+            step={step}
+            stepMs={stepTime}
+            workMs={t.workMs}
+            otherStepsMs={otherStepsMs}
+            onClose={() => setStepMenu(false)}
+            onEnd={() => {
+              setStepMenu(false);
+              void actions.endStep(job);
+            }}
+            onAssignAll={() => {
+              setStepMenu(false);
+              void actions.assignAllToStep(job, step);
+            }}
+            onClear={() => {
+              setStepMenu(false);
+              void actions.clearStep(job, step);
+            }}
+          />
         )}
         <View style={styles.buttons}>
           <View style={{ flex: 1.5 }}>
@@ -190,6 +235,7 @@ export function JobCard({
             current={step}
             choices={stepChoices}
             sinceMs={timeSinceStepChange(entries, job.currentStep, now).ms}
+            autoTakeOver={!step && endedSteps}
             flowSteps={steps}
             canHide={!!article}
             onRename={(from, to) => void actions.renameStep(job, article, from, to)}

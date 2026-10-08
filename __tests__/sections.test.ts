@@ -144,3 +144,41 @@ describe('Arbeitsschritte bearbeiten (#18)', () => {
     expect((await s.repos.articles.get(a.id))?.hiddenSteps).toEqual(['Kleebn']);
   });
 });
+
+describe('Schritt-Uhr korrigieren (#18 Nachtrag)', () => {
+  it('„Schritt beendet“: Zeit läuft ohne Schritt weiter; der nächste übernimmt sie (Gesamt − beendete Schritte)', async () => {
+    const s = store();
+    const j = await s.repos.jobs.start({ orderNo: '2600010', currentStep: 'A' });
+    s.tick(60 * MIN);
+    await s.repos.jobs.nextStep(j.id, null);
+    expect(await s.repos.jobs.get(j.id)).toMatchObject({ status: 'running', currentStep: null });
+    const open = (await s.repos.entries.listAll()).filter((e) => e.jobId === j.id && e.endAt === null);
+    expect(open).toHaveLength(1);
+    expect(open[0].step).toBeNull();
+    s.tick(30 * MIN);
+    await s.repos.jobs.relabelStep(j.id, 'B');
+    s.tick(10 * MIN);
+    const entries = (await s.repos.entries.listAll()).filter((e) => e.jobId === j.id);
+    expect(timeByStep(entries, ['A', 'B'], 1_000 + 100 * MIN)).toEqual([
+      { step: 'A', ms: 60 * MIN },
+      { step: 'B', ms: 40 * MIN },
+    ]);
+  });
+
+  it('= ganze Arbeitszeit und Schrittzeit löschen', async () => {
+    const s = store();
+    const j = await s.repos.jobs.start({ orderNo: '2600011' });
+    s.tick(60 * MIN);
+    await s.repos.jobs.nextStep(j.id, 'A');
+    s.tick(60 * MIN);
+    const now = 1_000 + 120 * MIN;
+    const list = async () => (await s.repos.entries.listAll()).filter((e) => e.jobId === j.id);
+    expect(timeByStep(await list(), ['A'], now)).toEqual([{ step: 'A', ms: 60 * MIN }, { step: null, ms: 60 * MIN }]);
+    await s.repos.jobs.assignAllToStep(j.id, 'A');
+    expect(timeByStep(await list(), ['A'], now)).toEqual([{ step: 'A', ms: 120 * MIN }]);
+    await s.repos.jobs.clearStep(j.id, 'A');
+    expect(timeByStep(await list(), ['A'], now)).toEqual([{ step: null, ms: 120 * MIN }]);
+    expect(await s.repos.jobs.get(j.id)).toMatchObject({ currentStep: null, status: 'running' });
+    expect((await list()).some((e) => e.endAt === null)).toBe(true);
+  });
+});

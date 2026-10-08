@@ -213,10 +213,33 @@ export class SqliteJobRepository implements JobRepository {
       await this.db.runAsync('UPDATE jobs SET current_step = ?, updated_at = ? WHERE id = ?', next, now, id);
       // Einzelschritt-Timer: gewählter Schritt wird der neue Einzelschritt
       if (job.onlyStep && next) await this.db.runAsync('UPDATE jobs SET only_step = ? WHERE id = ?', next, id);
-      if (job.status === 'running' && next) {
+      // läuft der Timer, geht die Zeit sofort weiter – mit dem nächsten Schritt bzw. ohne Schritt („Schritt beendet“)
+      if (job.status === 'running') {
         await this.openEntry(id, now, next, job.workers ?? 1);
         await this.db.runAsync("UPDATE jobs SET status = 'running' WHERE id = ?", id);
       }
+    });
+  }
+
+  async assignAllToStep(id: string, step: string): Promise<void> {
+    const job = await this.require(id);
+    const now = Date.now();
+    await this.db.withTransactionAsync(async () => {
+      await this.db.runAsync(
+        'UPDATE entries SET step = ?, updated_at = ? WHERE job_id = ? AND deleted_at IS NULL AND (step IS NULL OR step <> ?)',
+        step, now, id, step,
+      );
+      await this.db.runAsync('UPDATE jobs SET current_step = ?, updated_at = ? WHERE id = ?', step, now, id);
+      if (job.onlyStep) await this.db.runAsync('UPDATE jobs SET only_step = ? WHERE id = ?', step, id);
+    });
+  }
+
+  async clearStep(id: string, step: string): Promise<void> {
+    const job = await this.require(id);
+    const now = Date.now();
+    await this.db.withTransactionAsync(async () => {
+      await this.db.runAsync('UPDATE entries SET step = NULL, updated_at = ? WHERE job_id = ? AND deleted_at IS NULL AND step = ?', now, id, step);
+      if (job.currentStep === step) await this.db.runAsync('UPDATE jobs SET current_step = NULL, updated_at = ? WHERE id = ?', now, id);
     });
   }
 

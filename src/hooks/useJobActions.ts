@@ -33,6 +33,12 @@ export function useJobActions() {
             await r.jobs.nextStep(job.id, step);
             await unhide(r, job, article, step);
           }),
+    /** „Schritt beendet“: die Zeit läuft ohne Schritt weiter, bis der nächste Schritt gewählt wird (der übernimmt sie) */
+    endStep: (job: Job) => mutate((r) => r.jobs.nextStep(job.id, null)),
+    /** Schritt-Uhr = ganze Arbeitszeit: alle Abschnitte des Auftrags zählen zu diesem Schritt */
+    assignAllToStep: (job: Job, step: string) => mutate((r) => r.jobs.assignAllToStep(job.id, step)),
+    /** Zeit dieses Schritts freigeben (wird „ohne Schritt“) */
+    clearStep: (job: Job, step: string) => mutate((r) => r.jobs.clearStep(job.id, step)),
     /** Schritt in den eigenen Aufträgen umbenennen; der alte Name verschwindet aus der Auswahl des Artikels */
     renameStep: (job: Job, article: Article | undefined, from: string, to: string) =>
       mutate(async (r) => {
