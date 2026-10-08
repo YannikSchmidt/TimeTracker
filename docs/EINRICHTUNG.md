@@ -108,6 +108,17 @@ Im Timer zeigt die Kachel den aktuellen Schritt; „<Schritt> fertig → <nächs
 nahtlos im nächsten Schritt weiter. Beim letzten Schritt beendet „Fertig“ den Auftrag. Beim Start kann man statt des
 ganzen Ablaufs „Nur <Schritt>“ wählen (z.B. beim Aushelfen).
 
+Der Knopf **„Schritt“** neben Pause/Fertig öffnet eine Auswahl: alle Schritte des Ablaufs und alle, die für diesen
+Artikel schon verwendet wurden, dazu ein Feld für einen neuen Schritt. Ab der Auswahl wird die Zeit auf diesen Schritt
+gebucht – auch für Artikel ohne Ablauf. Neue Schritte stehen beim nächsten Auftrag mit demselben Artikel zur Auswahl.
+
+## Scannen
+
+Auf dem Auftragspapier steht die **Auftragsnummer als Strichcode** (Code 39) und die **Artikelnummer im
+Data-Matrix-Quadrat**. Die App liest nur diese Arten (dazu Code 128) und übernimmt einen Code erst, wenn er mehrmals
+gleich erkannt wurde – halb gelesene oder falsche Nummern fallen so heraus. Tipps: Code in den weißen Rahmen halten,
+gerade und ruhig; bei kleinen Codes „2×“ (Zoom) antippen und das Handy etwas weiter weg halten.
+
 ## Vorgabezeiten
 
 Im Artikel unter *Vorgabezeiten* je Arbeitsschritt **Rüsten** (Minuten, einmal pro Auftrag) und **je Stück**

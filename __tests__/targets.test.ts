@@ -115,6 +115,10 @@ describe('Mehrere Personen', () => {
     expect(max).toMatchObject({ actualMs: 2 * 60 * MIN, targetMs: 3 * 60 * MIN, deltaPct: -33 });
     // allein am Auftrag: wie bisher
     expect(compareShare([parts[0]], new Set(['j']), v, [], 0)).toEqual(compareOrder([parts[0]], v, [], 0));
+    // allein, mit Schritt, an dem noch nicht gearbeitet wurde: volle Vorgabe (wie compareOrder)
+    const b = article({ A: { setup: 1, perPiece: 0 }, B: { setup: 2, perPiece: 0 } });
+    const solo = [{ job: job({ id: 'j' }), entries: [{ ...e('j', 1), step: 'A' }] }];
+    expect(compareShare(solo, new Set(['j']), b, ['A', 'B'], 0)).toEqual(compareOrder(solo, b, ['A', 'B'], 0));
   });
 
   it('Zusammenarbeit pro Schritt: jeder bekommt den Anteil des Schritts, an dem er gearbeitet hat', () => {

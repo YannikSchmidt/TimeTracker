@@ -11,6 +11,8 @@ export function useJobActions() {
     resume: (job: Job) => mutate((r) => r.jobs.resume(job.id)),
     /** Arbeitsschritt abschließen, mit dem nächsten weitermachen (Zeit läuft weiter) */
     nextStep: (job: Job, next: string | null) => mutate((r) => r.jobs.nextStep(job.id, next)),
+    /** Auf einen beliebigen Arbeitsschritt wechseln – die Zeit wird ab jetzt auf diesen Schritt gebucht */
+    switchStep: (job: Job, step: string) => (step === job.currentStep ? Promise.resolve() : mutate((r) => r.jobs.nextStep(job.id, step))),
     /** Personenzähler ändern (laufende Zeit wird ab jetzt mit der neuen Anzahl gezählt) */
     setWorkers: (job: Job, workers: number) => mutate((r) => r.jobs.setWorkers(job.id, workers)),
     /** Auftrag: sofort beenden und Abschluss zeigen. Nacharbeit: erst Grund abfragen. */

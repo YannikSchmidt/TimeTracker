@@ -2,6 +2,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { useScanConfirm } from '../hooks/useRequiredReads';
 import { radius, spacing } from '../theme';
 import type { ScanKind } from './barcode.web';
 import { BARCODE_TYPES } from './ScanButton';
@@ -17,6 +18,8 @@ export type ScanHandler = (code: string) => boolean | void;
 export function ScannerView({ hint, onScan, kind = 'barcode' }: { hint: string; onScan: ScanHandler; kind?: ScanKind }) {
   const [permission, requestPermission] = useCameraPermissions();
   const handled = useRef(false);
+  // Ein Code gilt erst, wenn er mehrfach gleich gelesen wurde (gegen halbe/falsche Nummern)
+  const confirm = useScanConfirm(kind);
 
   if (!permission?.granted) {
     return (
@@ -34,7 +37,7 @@ export function ScannerView({ hint, onScan, kind = 'barcode' }: { hint: string; 
         facing="back"
         barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES[kind] }}
         onBarcodeScanned={({ data }) => {
-          if (handled.current || !data?.trim()) return;
+          if (handled.current || !data?.trim() || !confirm.accept(data)) return;
           handled.current = true;
           if (onScan(data.trim()) === false) {
             // ignoriert (z.B. derselbe Code wie eben) → kurz warten, dann weiter scannen
