@@ -1,5 +1,5 @@
 import type { BackupData, LegacyBackupData } from '../domain/legacy';
-import type { Article, Dimension, DimensionValue, Entry, Job, JobFields, JobKind, Millis, Settings, DeletionKind, DeletionRequest, DeletionStatus, MainGroup, ProductGroup } from '../domain/types';
+import type { Article, Dimension, DimensionValue, Entry, Job, JobFields, JobKind, Millis, Settings, DeletionKind, DeletionRequest, DeletionStatus, MainGroup, ProductGroup, Section, TimeHandover, HandoverStatus } from '../domain/types';
 
 export type { BackupData, LegacyBackupData };
 
@@ -60,6 +60,10 @@ export interface JobRepository {
    * neuen Anzahl beginnt – so zählt jede Zeitspanne mit der richtigen Personenzahl.
    */
   setWorkers(id: string, workers: number): Promise<void>;
+  /** Personenzähler aller Abschnitte setzen (z.B. 1, nachdem die Zeit der Mitarbeitenden übergeben wurde). */
+  setWorkersAll(id: string, workers: number): Promise<void>;
+  /** Übernommene Zeit als eigenen, abgeschlossenen Auftrag anlegen (Schritte nur bei `withSteps`). */
+  createFromHandover(handover: TimeHandover): Promise<Job>;
   /** Abgeschlossenen Auftrag wieder öffnen (pausiert). */
   reopen(id: string): Promise<void>;
   update(id: string, fields: Partial<JobFields>): Promise<void>;
@@ -78,6 +82,11 @@ export interface EntryRepository {
   /** Start/Ende bzw. Arbeitsschritt korrigieren; beim laufenden Abschnitt wechselt auch der Schritt des Auftrags. */
   update(id: string, input: { startAt?: Millis; endAt?: Millis | null; step?: string | null }): Promise<void>;
   remove(id: string): Promise<void>;
+  /**
+   * Abgeschlossenen Abschnitt dem anderen Teil (Display-Verheiratung / Gesamtmontage) zuordnen: er wandert in den
+   * eigenen Auftrag mit gleicher Auftragsnummer, gleichem Artikel und diesem Teil (wird bei Bedarf angelegt).
+   */
+  moveToSection(id: string, section: Section): Promise<void>;
 }
 
 export interface DimensionRepository {
@@ -146,9 +155,19 @@ export interface DeletionRequestRepository {
   setStatus(id: string, status: DeletionStatus): Promise<void>;
 }
 
+export type HandoverInput = Omit<TimeHandover, 'id' | 'status' | 'from' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
+
+/** Zeitübergaben an Mitarbeitende (gemeinsame Datei, nur mit Team-Sync). */
+export interface HandoverRepository {
+  list(): Promise<TimeHandover[]>;
+  create(input: HandoverInput): Promise<TimeHandover>;
+  setStatus(id: string, status: HandoverStatus): Promise<void>;
+}
+
 export interface Repositories {
   jobs: JobRepository;
   requests: DeletionRequestRepository;
+  handovers: HandoverRepository;
   groups: GroupRepository;
   entries: EntryRepository;
   dimensions: DimensionRepository;

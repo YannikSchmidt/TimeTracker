@@ -148,6 +148,13 @@ Data-Matrix-Quadrat**. Die App liest nur diese Arten (dazu Code 128) und überni
 gleich erkannt wurde – halb gelesene oder falsche Nummern fallen so heraus. Tipps: Code in den weißen Rahmen halten,
 gerade und ruhig; bei kleinen Codes „2×“ (Zoom) antippen und das Handy etwas weiter weg halten.
 
+**Lager-Artikel:** Artikelnummern mit der Endung „LA“ (z.B. 07123456LA) sind Lagergeräte und werden wie der normale
+Artikel erkannt – Gesamtgeräte also mit der Frage Display-Verheiratung oder Gesamtmontage.
+
+**Abschnitt einem anderen Teil zuordnen:** Im Auftrag einen Arbeitsabschnitt antippen → unter **Teil** Display-Verheiratung
+bzw. Gesamtmontage wählen → Speichern. Der Abschnitt wandert in den Auftrag dieses Teils (wird bei Bedarf angelegt).
+Laufende Abschnitte vorher pausieren.
+
 ## Vorgabezeiten
 
 Im Artikel unter *Vorgabezeiten* je Arbeitsschritt **Rüsten** (Minuten, einmal pro Auftrag) und **je Stück**
@@ -155,6 +162,8 @@ Im Artikel unter *Vorgabezeiten* je Arbeitsschritt **Rüsten** (Minuten, einmal 
 Einzelzeit × Stückzahl. Verglichen wird mit der Zeit, in der der Timer lief: in der Kachel (rot = über Vorgabe), im
 abgeschlossenen Auftrag je Schritt und in der Statistik (Arbeitsbilanz, jeder Auftrag mit Ist- und Soll-Balken, je
 Untergruppe und Artikel). **Bilanz = Soll − Ist**: positiv (grün) = schneller als geplant, negativ (rot) = länger.
+Läuft ein Auftrag über das Wochen- bzw. Monatsende, zählt er in jedem Zeitraum anteilig nach der dort gearbeiteten Zeit
+(Ist und Vorgabe gleichermaßen, z.B. 40 % in KW 41 und 60 % in KW 42).
 
 ## Mehrere Personen an einem Auftrag
 
@@ -167,6 +176,14 @@ Untergruppe und Artikel). **Bilanz = Soll − Ist**: positiv (grün) = schneller
   Bilanz für alle negativ.
 - **Eine Person trackt für mehrere**: Personenzähler beim Start oder in der Kachel (− / +). Die Zeit zählt ab dann
   mal Personen (Personenzeit); ändert sich die Zahl, gilt die neue Anzahl ab diesem Moment.
+- **Mitarbeitende benennen** (mit Team-Sync): Nach „Fertig“ eines Auftrags mit mehr als einer Person fragt die App
+  optional **„Wer hat mitgearbeitet?“**. Für jede weitere Person einen Namen wählen oder eintippen (auch Personen, die
+  noch nicht im Team sind) und festlegen, ob die Zeit **auch auf die Arbeitsschritte** gebucht wird oder nur auf den
+  Auftrag. „Zeit übergeben“: Jede benannte Person sieht im Timer-Tab **„Zeit übernehmen?“** – bei „Übernehmen“ bekommt
+  sie einen eigenen abgeschlossenen Auftrag mit genau ihrer Zeit (Person 2 die Zeit mit mindestens 2 Personen, Person 3
+  die mit mindestens 3 …). Wer erst später beitritt, wird dann gefragt (Zuordnung über den Namen). Dein eigener
+  Auftrag zählt danach nur noch dich; zusammen zählt die Zeit je Person auf dem Auftrag, die Vorgabe wird anteilig
+  verteilt.
 
 ## Admin und Löschen
 

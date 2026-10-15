@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { Entry, Millis } from '../../domain/types';
+import { newId } from '../../db/ids';
+import type { Entry, Millis, Section } from '../../domain/types';
 import type { EntryRepository } from '../types';
 import { notFound, validateTimes } from '../validation';
 
@@ -92,6 +93,40 @@ export class SqliteEntryRepository implements EntryRepository {
         );
       }
       await syncJobBounds(this.db, current.jobId);
+    });
+  }
+
+  async moveToSection(id: string, section: Section): Promise<void> {
+    const e = await this.get(id);
+    if (!e || e.deletedAt) throw notFound('Abschnitt');
+    if (e.endAt === null) throw new Error('Den laufenden Abschnitt bitte erst pausieren.');
+    const src = await this.db.getFirstAsync<{ id: string; order_no: string | null; article_id: string | null; quantity: number | null; section: string | null }>(
+      'SELECT id, order_no, article_id, quantity, section FROM jobs WHERE id = ?',
+      e.jobId,
+    );
+    if (!src || (src.section === 'display') === (section === 'display')) return;
+    const now = Date.now();
+    await this.db.withTransactionAsync(async () => {
+      const display = section === 'display' ? "section = 'display'" : "(section IS NULL OR section <> 'display')";
+      const found = src.order_no
+        ? await this.db.getFirstAsync<{ id: string }>(
+            `SELECT id FROM jobs WHERE deleted_at IS NULL AND kind = 'order' AND id <> ? AND order_no = ? AND article_id IS ? AND ${display}`,
+            src.id, src.order_no, src.article_id,
+          )
+        : null;
+      let targetId = found?.id;
+      if (!targetId) {
+        targetId = newId();
+        await this.db.runAsync(
+          `INSERT INTO jobs (id, kind, status, article_id, order_no, quantity, note, parent_job_id, rework_reason,
+                             started_at, finished_at, current_step, only_step, workers, section, created_at, updated_at)
+           VALUES (?, 'order', 'done', ?, ?, ?, '', NULL, NULL, ?, ?, NULL, NULL, 1, ?, ?, ?)`,
+          targetId, src.article_id, src.order_no, src.quantity, e.startAt, e.endAt, section, now, now,
+        );
+      }
+      await this.db.runAsync('UPDATE entries SET job_id = ?, updated_at = ? WHERE id = ?', targetId, now, id);
+      await syncJobBounds(this.db, src.id);
+      await syncJobBounds(this.db, targetId);
     });
   }
 }

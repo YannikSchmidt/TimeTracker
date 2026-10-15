@@ -160,6 +160,35 @@ export interface DeletionRequest extends SyncMeta {
   decidedBy: string | null;
 }
 
+export type HandoverStatus = 'open' | 'accepted' | 'declined';
+
+/**
+ * Zeitübergabe: Wer einen Auftrag mit mehreren Personen abschließt, benennt die Mitarbeitenden. Jede benannte Person
+ * bekommt diese Übergabe (gemeinsame Datei) und kann die Zeit als eigenen Auftrag übernehmen – auch wenn sie erst
+ * später dem Team beitritt.
+ */
+export interface TimeHandover extends SyncMeta {
+  id: string;
+  /** Kennung und Name der Person, die übergibt */
+  from: string | null;
+  fromName: string;
+  /** Kennung der Empfängerin (Login bzw. aus dem Namen gebildet) und eingegebener Name */
+  to: string;
+  toName: string;
+  /** Auftrag, aus dem die Zeit stammt */
+  jobId: string;
+  orderNo: string | null;
+  articleId: string | null;
+  section: Section | null;
+  quantity: number | null;
+  /** Anzeigetext, z.B. „2612345 · Kühlteil“ */
+  label: string;
+  /** Zeit auch auf die Arbeitsschritte buchen (sonst nur auf den Auftrag) */
+  withSteps: boolean;
+  segments: { startAt: Millis; endAt: Millis; step: string | null }[];
+  status: HandoverStatus;
+}
+
 /** Hauptgruppen – strikt getrennt */
 export type MainGroup = 'device' | 'part';
 

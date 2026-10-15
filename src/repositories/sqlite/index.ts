@@ -49,6 +49,16 @@ export function createSqliteRepositories(db: SQLiteDatabase): Repositories {
       },
       async setStatus() {},
     },
+    // Zeitübergaben gibt es nur mit Team-Sync (Web-App)
+    handovers: {
+      async list() {
+        return [];
+      },
+      async create() {
+        throw new Error('Zeitübergaben gibt es nur mit Team-Sync.');
+      },
+      async setStatus() {},
+    },
     groups,
     entries,
     dimensions,

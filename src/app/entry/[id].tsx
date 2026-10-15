@@ -7,7 +7,8 @@ import { DateTimeField } from '../../components/DateTimeField';
 import { DeleteAction } from '../../components/DeleteAction';
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
-import { stepChoices } from '../../domain/flows';
+import { SECTION_LABEL, stepChoices } from '../../domain/flows';
+import type { Section } from '../../domain/types';
 import { hiddenStepsFor } from '../../domain/targets';
 import { formatDuration, formatTime } from '../../domain/time';
 import { useArticles } from '../../hooks/useArticles';
@@ -31,6 +32,8 @@ export default function EntryScreen() {
   const [endAt, setEndAt] = useState<number | null>(null);
   const [step, setStep] = useState<string | null>(null);
   const [otherStep, setOtherStep] = useState('');
+  /** Teil bei Gesamtgeräten; null = unverändert */
+  const [sectionChoice, setSectionChoice] = useState<Section | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,12 +52,19 @@ export default function EntryScreen() {
   const sameKind = (j: { articleId: string | null; section?: string | null; id: string }) =>
     job && (job.articleId ? j.articleId === job.articleId && (j.section === 'display') === (job.section === 'display') : j.id === job.id);
   const used = work.all.jobs.filter((j) => sameKind(j)).flatMap((j) => (work.all.entriesOf.get(j.id) ?? []).map((e) => e.step));
-  const choices = stepChoices(groups.flowOf(article, job?.section ?? null).steps, used, hiddenStepsFor(article, job?.section), entry?.step ?? null);
+  // Gesamtgerät: Abschnitt kann dem anderen Teil zugeordnet werden (wandert in dessen Auftrag)
+  const showSection = !!job && job.kind === 'order' && (!!job.section || groups.hasSections(article));
+  const currentSection: Section = job?.section === 'display' ? 'display' : 'assembly';
+  const section = sectionChoice ?? currentSection;
+  const choices = stepChoices(groups.flowOf(article, section).steps, used, hiddenStepsFor(article, section), entry?.step ?? null);
   const invalid = !running && endAt <= startAt;
 
   const save = async () => {
     try {
-      await mutate((r) => r.entries.update(id, { startAt, endAt, step }));
+      await mutate(async (r) => {
+        await r.entries.update(id, { startAt, endAt, step });
+        if (showSection && section !== currentSection) await r.entries.moveToSection(id, section);
+      });
       router.back();
     } catch (e) {
       setError(`Speichern nicht möglich: ${e instanceof Error ? e.message : String(e)}`);
@@ -75,6 +85,23 @@ export default function EntryScreen() {
           {invalid ? 'Ende muss nach dem Start liegen' : running ? '' : `Dauer: ${formatDuration(endAt - startAt)}`}
         </Text>
       </Card>
+      {showSection && (
+        <Card style={{ gap: spacing.sm }}>
+          <SectionTitle>Teil</SectionTitle>
+          <View style={styles.chips}>
+            {(['display', 'assembly'] as const).map((s) => (
+              <Chip key={s} label={SECTION_LABEL[s]} selected={section === s} onPress={() => setSectionChoice(s)} />
+            ))}
+          </View>
+          <Text style={{ color: p.muted, fontSize: 12 }}>
+            {running
+              ? 'Den laufenden Abschnitt bitte erst pausieren, um ihn einem anderen Teil zuzuordnen.'
+              : section !== currentSection
+                ? `Beim Speichern wandert der Abschnitt in den Auftrag „${SECTION_LABEL[section]}“ (wird bei Bedarf angelegt).`
+                : 'Display-Verheiratung und Gesamtmontage sind eigene Aufträge.'}
+          </Text>
+        </Card>
+      )}
       <Card style={{ gap: spacing.sm }}>
         <SectionTitle>Arbeitsschritt</SectionTitle>
         <View style={styles.chips}>

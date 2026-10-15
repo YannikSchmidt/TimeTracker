@@ -6,6 +6,7 @@ import { DateTimeField } from '../../components/DateTimeField';
 import { ArticleField, OrderField, QuantityField, parseQuantity, type ArticleFieldHandle } from '../../components/EntryFields';
 import { DimensionPicker } from '../../components/ValuePicker';
 import { DeleteAction } from '../../components/DeleteAction';
+import { HandoverCard } from '../../components/Handover';
 import { Button, Card, Chip, SectionTitle } from '../../components/ui';
 import { useData } from '../../data/DataProvider';
 import { SECTION_LABEL, timeByStep } from '../../domain/flows';
@@ -19,6 +20,7 @@ import { useDimensions } from '../../hooks/useDimensions';
 import { useGroups } from '../../hooks/useGroups';
 import { useJobActions } from '../../hooks/useJobActions';
 import { useNow } from '../../hooks/useNow';
+import { usePermissions } from '../../hooks/usePermissions';
 import { useWork } from '../../hooks/useWork';
 import { radius, spacing, usePalette } from '../../theme';
 
@@ -35,6 +37,7 @@ export default function JobScreen() {
   const articles = useArticles();
   const groups = useGroups();
   const actions = useJobActions();
+  const perms = usePermissions();
   const now = useNow(1000);
   const articleRef = useRef<ArticleFieldHandle>(null);
   const job = isNew ? undefined : work.all.jobsById.get(id);
@@ -182,6 +185,9 @@ export default function JobScreen() {
           {done === '1' && <Button title="Fertig" variant="secondary" onPress={() => router.back()} />}
         </Card>
       )}
+
+      {/* Mit mehreren Personen abgeschlossen: Mitarbeitende benennen und ihre Zeit übergeben (nur mit Team) */}
+      {job && done === '1' && perms.team && !readOnly && <HandoverCard job={job} entries={entries} label={jobName(job, articleOf(job))} />}
 
       {job && cmp && (cmp.targetMs !== null || stepTimes.length > 0) && (
         <Card style={{ gap: spacing.xs }}>

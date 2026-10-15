@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { HandoverInbox } from '../../components/Handover';
 import { JobCard } from '../../components/JobCard';
 import { JobRow } from '../../components/JobRow';
 import { SyncBadge, SyncSetupHint } from '../../components/SyncBadge';
@@ -73,6 +74,7 @@ export default function TimerScreen() {
       <UpdateBanner />
       <SyncSetupHint />
       <SyncBadge />
+      <HandoverInbox />
 
       <View style={{ gap: spacing.md }}>
         <SectionTitle>Offene Aufträge {cards.length > 0 ? `(${cards.length})` : ''}</SectionTitle>

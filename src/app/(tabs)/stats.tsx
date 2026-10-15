@@ -31,6 +31,8 @@ import {
   formatBalance,
   orderArticle,
   orderKey,
+  scaleComparison,
+  shareInRange,
   sameOrder,
   teamPraise,
   type Comparison,
@@ -89,9 +91,13 @@ export default function StatsScreen() {
     const trend = TREND[kind];
     const trendRange =
       trend.count > 0 ? { start: shiftAnchor(kind, range.start, -(trend.count - 1)), end: range.end } : range;
-    // Vorgabe gegen Ist: abgeschlossene Aufträge mit Abschluss im Zeitraum. Arbeiten mehrere am selben Auftrag,
-    // wird die Vorgabe im Verhältnis der geleisteten Zeit aufgeteilt (eigener Anteil).
-    const inRange = (j: Job) => j.kind === 'order' && j.status === 'done' && j.finishedAt !== null && j.finishedAt >= range.start && j.finishedAt < range.end;
+    // Vorgabe gegen Ist: abgeschlossene Aufträge mit Zeit im Zeitraum. Arbeiten mehrere am selben Auftrag, wird die
+    // Vorgabe im Verhältnis der geleisteten Zeit aufgeteilt (eigener Anteil). Läuft ein Auftrag über das Wochen- bzw.
+    // Monatsende, zählt er anteilig nach der Zeit im Zeitraum (Ist und Vorgabe gleichermaßen).
+    const inRange = (j: Job) =>
+      j.kind === 'order' &&
+      j.status === 'done' &&
+      (work.all.entriesOf.get(j.id) ?? []).some((e) => !e.deletedAt && e.startAt < range.end && (e.endAt ?? now) > range.start);
     const shareOf = (mine: Job[]) => {
       const parts = work.all.jobs.filter((j) => j.kind === 'order' && (mine.some((o) => o.id === j.id) || mine.some((o) => sameOrder(o, j))));
       const job = { ...mine[0], quantity: Math.max(0, ...parts.map((j) => j.quantity ?? 0)) || mine[0].quantity };
@@ -99,8 +105,11 @@ export default function StatsScreen() {
       const article = orderArticle([...mine, ...parts], articles.byId);
       const flow = groups.flowOf((job.articleId ? articles.byId.get(job.articleId) : undefined) ?? article, job.section ?? null);
       const own = new Set(mine.map((j) => j.id));
-      const comparison = compareShare(parts.map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [] })), own, article, flow.steps, now);
-      return { job, flow, comparison, shared: parts.some((j) => !own.has(j.id)), name: jobName(job, article ?? null) };
+      const whole = compareShare(parts.map((j) => ({ job: j, entries: work.all.entriesOf.get(j.id) ?? [] })), own, article, flow.steps, now);
+      const factor = shareInRange(mine.flatMap((j) => work.all.entriesOf.get(j.id) ?? []), range, now);
+      const comparison = scaleComparison(whole, factor);
+      const scaledJob = { ...job, quantity: job.quantity === null ? null : job.quantity * Math.min(1, factor) };
+      return { job: scaledJob, flow, comparison, factor, shared: parts.some((j) => !own.has(j.id)), name: jobName(job, article ?? null) };
     };
     const byOrder = (jobs: Job[]) => {
       const map = new Map<string, Job[]>();
@@ -134,7 +143,7 @@ export default function StatsScreen() {
     const orders = compared
       .filter((c) => c.comparison.targetMs !== null || c.shared)
       .sort((a, b) => (b.job.finishedAt ?? 0) - (a.job.finishedAt ?? 0))
-      .map((c) => ({ key: c.job.id, name: c.name, shared: c.shared, comparison: c.comparison }));
+      .map((c) => ({ key: c.job.id, name: c.name, shared: c.shared, comparison: c.comparison, factor: c.factor }));
     return {
       praise,
       orders,
@@ -222,12 +231,13 @@ export default function StatsScreen() {
         ) : (
           <View style={{ gap: spacing.sm }}>
             {stats.orders.slice(0, 30).map((o) => (
-              <OrderVs key={o.key} name={o.name} shared={o.shared} c={o.comparison} />
+              <OrderVs key={o.key} name={o.name} shared={o.shared} c={o.comparison} factor={o.factor} />
             ))}
             <Text style={{ color: p.muted, fontSize: 12 }}>
               Ist = deine Arbeitszeit (Personenzeit). Soll = Vorgabe. Arbeiten mehrere am Auftrag, bekommst du die Vorgabe im
               Verhältnis deiner Arbeitszeit: z.B. 6 von 10 Stunden = 60 % → 60 % der Vorgabe. Bilanz = Soll − Ist
-              (+ schneller, − länger als geplant).
+              (+ schneller, − länger als geplant). Aufträge über das Wochen- bzw. Monatsende zählen anteilig nach der Zeit im
+              Zeitraum.
             </Text>
           </View>
         )}
@@ -426,7 +436,7 @@ function VsTable({ title, rows, nameOf }: { title: string; rows: ComparisonRow[]
           </Text>
           <View style={styles.vsNums}>
             <Text style={{ color: p.muted, fontSize: 12, flex: 1 }} numberOfLines={2}>
-              {r.jobs} Auftr.{r.pieces ? ` · ${r.pieces} Stk` : ''}
+              {r.jobs} Auftr.{r.pieces ? ` · ${Math.round(r.pieces)} Stk` : ''}
               {r.actualMs > r.comparableMs ? ` · ${formatDuration(r.actualMs - r.comparableMs)} ohne Vorgabe` : ''}
             </Text>
             <Text style={[styles.vsNum, { color: p.text }]}>{r.jobsWithTarget ? formatDuration(r.comparableMs) : formatDuration(r.actualMs)}</Text>
@@ -447,7 +457,7 @@ function VsTable({ title, rows, nameOf }: { title: string; rows: ComparisonRow[]
 }
 
 /** Ein Auftrag: Ist und Soll als Balken, dazu Bilanz und – bei Zusammenarbeit – der eigene Anteil */
-function OrderVs({ name, shared, c }: { name: string; shared: boolean; c: Comparison }) {
+function OrderVs({ name, shared, c, factor }: { name: string; shared: boolean; c: Comparison; factor: number }) {
   const p = usePalette();
   const target = c.targetMs;
   const max = Math.max(c.actualMs, target ?? 0, 1);
@@ -462,6 +472,11 @@ function OrderVs({ name, shared, c }: { name: string; shared: boolean; c: Compar
           {target === null ? 'keine Vorgabe' : `Bilanz ${formatBalance(balanceMs(c.actualMs, target))}`}
         </Text>
       </View>
+      {factor < 0.995 && (
+        <Text style={{ color: p.muted, fontSize: 12 }}>
+          Läuft über den Zeitraum hinaus – anteilig {Math.round(factor * 100)} % in diesem Zeitraum
+        </Text>
+      )}
       {shared && c.share !== undefined && (
         <Text style={{ color: p.muted, fontSize: 12 }}>
           Dein Anteil an der Arbeitszeit: {Math.round(c.share * 100)} %

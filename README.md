@@ -40,7 +40,9 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
   (Gesamtgeräte und Fronten getrennt). **Bilanz = Soll − Ist**: + schneller, − länger als geplant. Arbeits-/Fehlzeiten werden nicht ausgewertet (Stempeluhr).
 - **Mehrere Personen**: Personenzähler im Timer (Zeit zählt mal Personen, änderbar während der Timer läuft).
   Starten mehrere Personen eigene Timer auf denselben Auftrag, wird die Vorgabe im Verhältnis der geleisteten Zeit
-  aufgeteilt (z.B. 15 h Vorgabe, 8 h + 2 h gearbeitet → 12 h + 3 h gutgeschrieben).
+  aufgeteilt (z.B. 15 h Vorgabe, 8 h + 2 h gearbeitet → 12 h + 3 h gutgeschrieben). Nach „Fertig“ mit mehr als einer
+  Person: **„Wer hat mitgearbeitet?“** – jede benannte Person bekommt ihre Zeit als eigenen Auftrag (auch wer noch nicht
+  im Team ist; sie wird beim Beitreten gefragt), wahlweise mit oder ohne Arbeitsschritte.
 - **Vorschläge aus früheren Eingaben**: zuletzt verwendete Auftragsnummern, häufige Artikel, Stückzahl
   (häufigste des Artikels, sonst Standard 24 – einstellbar) und bisherige Nacharbeitsgründe.
 - **Nacharbeit**: eigener Timer zu einem Auftrag (offen oder abgeschlossen). Beim Beenden wird der Grund
@@ -67,6 +69,9 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
 - **Automatische Updates**: keine Neuinstallation; die App lädt neue Versionen selbst (im Hintergrund oder per Hinweis).
 - **Scanner**: Live-Kamera (App und Web-App), alternativ per Foto. Liest Code 39, Code 128 und Data Matrix; ein Code
   zählt erst, wenn er mehrmals gleich erkannt wurde (gegen halb gelesene Nummern). 2×-Zoom für kleine Codes.
+- **Statistik über Zeitraumgrenzen**: Läuft ein Auftrag über das Wochen- bzw. Monatsende, zählt er anteilig nach der
+  Zeit im Zeitraum (Ist und Vorgabe gleichermaßen).
+- **Lager-Artikel** mit der Endung „LA“ (z.B. 07123456LA) werden wie normale Gesamtgeräte bzw. Fronten erkannt.
 - **Einstellungen**: Standard-Stückzahl, Nummernmuster, Merkmale, Team-Sync, CSV-Export pro Auftrag, JSON-Backup.
 
 ## Entwickeln und testen

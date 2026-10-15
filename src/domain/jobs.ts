@@ -92,3 +92,19 @@ export function jobName(
   if (job.kind === 'rework') return ['Nacharbeit', ...parts].join(' · ');
   return parts.length ? parts.join(' · ') : 'Ohne Auftragsnummer';
 }
+
+/** Höchster Personenzähler in den Abschnitten eines Auftrags (fehlt = 1). */
+export function maxWorkers(entries: Entry[]): number {
+  return entries.filter((e) => !e.deletedAt).reduce((m, e) => Math.max(m, e.workers ?? 1), 1);
+}
+
+/**
+ * Zeiten der k-ten Person (k ≥ 2) bei einem Timer mit Personenzähler: die abgeschlossenen Abschnitte, in denen
+ * mindestens k Personen eingetragen waren – genau diese Zeit hat die k-te Person mitgearbeitet.
+ */
+export function personSegments(entries: Entry[], k: number): { startAt: Millis; endAt: Millis; step: string | null }[] {
+  return entries
+    .filter((e) => !e.deletedAt && e.endAt !== null && (e.workers ?? 1) >= k)
+    .sort((a, b) => a.startAt - b.startAt)
+    .map((e) => ({ startAt: e.startAt, endAt: e.endAt!, step: e.step ?? null }));
+}

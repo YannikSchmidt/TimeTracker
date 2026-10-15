@@ -41,10 +41,19 @@ export function matchesPatterns(code: string, patterns: string): boolean {
     .some((re) => !!re && re.test(c));
 }
 
+/** Lagergeräte tragen die Endung „LA“ (z.B. 07123456LA) – sonst ganz normale Artikel. */
+const STOCK_SUFFIX = /LA$/i;
+
 export function classifyCode(code: string, patterns: CodePatterns = DEFAULT_CODE_PATTERNS): CodeKind {
   if (matchesPatterns(code, patterns.order)) return 'order';
   if (matchesPatterns(code, patterns.device)) return 'device';
   if (matchesPatterns(code, patterns.part)) return 'part';
+  // Lager-Artikel: ohne die Endung „LA“ wie der normale Artikel erkennen
+  const base = code.trim().replace(STOCK_SUFFIX, '');
+  if (base !== code.trim() && base) {
+    if (matchesPatterns(base, patterns.device)) return 'device';
+    if (matchesPatterns(base, patterns.part)) return 'part';
+  }
   return 'unknown';
 }
 
