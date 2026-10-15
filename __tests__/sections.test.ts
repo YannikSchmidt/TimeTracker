@@ -182,3 +182,27 @@ describe('Schritt-Uhr korrigieren (#18 Nachtrag)', () => {
     expect((await list()).some((e) => e.endAt === null)).toBe(true);
   });
 });
+
+describe('Abschnitt einem anderen Teil zuordnen (#19)', () => {
+  it('wandert in den Auftrag des anderen Teils (wird angelegt bzw. gefunden); laufender geht nicht', async () => {
+    const s = store();
+    const j = await s.repos.jobs.start({ orderNo: '2600020', articleId: 'a', section: 'display', quantity: 5 });
+    s.tick(10 * MIN);
+    await s.repos.jobs.pause(j.id);
+    s.tick(MIN);
+    await s.repos.jobs.resume(j.id);
+    const [first, running] = (await s.repos.entries.listAll()).filter((e) => e.jobId === j.id).sort((a, b) => a.startAt - b.startAt);
+    await expect(s.repos.entries.moveToSection(running.id, 'assembly')).rejects.toThrow(/pausieren/);
+    await s.repos.entries.moveToSection(first.id, 'assembly');
+    const jobs = await s.repos.jobs.listAll();
+    const assembly = jobs.find((x) => x.section === 'assembly')!;
+    expect(assembly).toMatchObject({ orderNo: '2600020', articleId: 'a', quantity: 5, status: 'done', startedAt: first.startAt });
+    expect((await s.repos.entries.get(first.id))?.jobId).toBe(assembly.id);
+    expect((await s.repos.jobs.get(j.id))?.startedAt).toBe(running.startAt);
+    // zweiter Abschnitt landet im selben Gesamtmontage-Auftrag
+    s.tick(5 * MIN);
+    await s.repos.jobs.pause(j.id);
+    await s.repos.entries.moveToSection(running.id, 'assembly');
+    expect((await s.repos.jobs.listAll()).filter((x) => x.section === 'assembly')).toHaveLength(1);
+  });
+});

@@ -1,5 +1,5 @@
 import { withMainGroups } from './flows';
-import type { Article, DeletionRequest, Dimension, DimensionValue, Entry, Job, Millis, ProductGroup, Settings } from './types';
+import type { Article, DeletionRequest, Dimension, DimensionValue, Entry, Job, Millis, ProductGroup, Settings, TimeHandover } from './types';
 
 /** Eintrag im Format bis Version 1 (ein Eintrag = ein Timer mit allen Feldern). */
 export interface LegacyEntry {
@@ -32,6 +32,8 @@ export interface BackupData {
   deletionRequests?: DeletionRequest[];
   /** Produktgruppen mit Ablauf (gemeinsam) */
   groups?: ProductGroup[];
+  /** Zeitübergaben an Mitarbeitende (gemeinsam) */
+  handovers?: TimeHandover[];
 }
 
 export interface LegacyBackupData {

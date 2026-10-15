@@ -36,3 +36,13 @@ describe('Nummern erkennen', () => {
     expect(looksLikeNumber('M8')).toBe(true);
   });
 });
+
+describe('Lager-Artikel (Endung LA)', () => {
+  it('wird wie der normale Artikel erkannt', () => {
+    expect(classifyCode('07123456LA')).toBe('device');
+    expect(classifyCode('07123456la')).toBe('device');
+    expect(classifyCode('5000001234LA')).toBe('part');
+    expect(classifyCode('2612345LA')).toBe('unknown'); // Aufträge haben keine Lager-Endung
+    expect(classifyCode('LA')).toBe('unknown');
+  });
+});

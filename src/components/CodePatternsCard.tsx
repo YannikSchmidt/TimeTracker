@@ -26,7 +26,8 @@ export function CodePatternsCard({ patterns }: { patterns: CodePatterns }) {
     <Card style={{ gap: spacing.md }}>
       <Text style={{ color: p.muted, fontSize: 12 }}>
         Daran erkennt der Scanner, was gescannt wurde – die Reihenfolge ist dann egal. „*“ steht für eine beliebige Ziffer,
-        mehrere Muster mit Komma trennen.
+        mehrere Muster mit Komma trennen. Lager-Artikel mit der Endung „LA“ (z.B. 07123456LA) werden automatisch wie der
+        normale Artikel erkannt.
       </Text>
       {FIELDS.map((key) => (
         <View key={key} style={{ gap: 4 }}>

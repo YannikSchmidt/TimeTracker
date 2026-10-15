@@ -1,6 +1,6 @@
 import { entryMs, timeByStep } from './flows';
 import { formatDuration } from './time';
-import type { Article, Entry, Job, Millis, Section } from './types';
+import type { Article, Entry, Job, Millis, Range, Section } from './types';
 
 /** Vorgabe eines Arbeitsschritts in Minuten: Rüstzeit (einmal pro Auftrag) + Einzelzeit (pro Stück). */
 export interface StepTarget {
@@ -153,6 +153,36 @@ export function teamPraise(me: string, people: { id: string; actualMs: Millis; t
   if (faster === 0 && slower === ratios.length - 1) return 'Du warst in diesem Zeitraum am schnellsten im Team.';
   if (faster < Math.floor(ratios.length / 2)) return 'Du gehörst in diesem Zeitraum zu den Schnelleren im Team.';
   return null;
+}
+
+/**
+ * Anteil eines Auftrags an einem Zeitraum (Woche/Monat): Personenzeit im Zeitraum ÷ Personenzeit gesamt.
+ * Läuft ein Auftrag über das Wochen- bzw. Monatsende, wird er so anteilig auf beide Zeiträume verteilt.
+ */
+export function shareInRange(entries: Entry[], range: Range, now: Millis): number {
+  let total = 0;
+  let inside = 0;
+  for (const e of entries) {
+    if (e.deletedAt) continue;
+    const end = e.endAt ?? now;
+    const persons = e.workers ?? 1;
+    total += (end - e.startAt) * persons;
+    inside += Math.max(0, Math.min(end, range.end) - Math.max(e.startAt, range.start)) * persons;
+  }
+  return total > 0 ? inside / total : 0;
+}
+
+/** Vergleich mit einem Anteil (0–1) skalieren – Ist und Vorgabe gleichermaßen, die Abweichung bleibt gleich. */
+export function scaleComparison(c: Comparison, factor: number): Comparison {
+  if (factor >= 1) return c;
+  const scale = (ms: Millis | null) => (ms === null ? null : Math.round(ms * factor));
+  return {
+    ...c,
+    actualMs: Math.round(c.actualMs * factor),
+    targetMs: scale(c.targetMs),
+    byStep: c.byStep.map((s) => ({ ...s, actualMs: Math.round(s.actualMs * factor), targetMs: scale(s.targetMs) })),
+    ...(c.orderTargetMs !== undefined ? { orderTargetMs: scale(c.orderTargetMs) } : {}),
+  };
 }
 
 /**

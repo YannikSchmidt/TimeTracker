@@ -1,4 +1,4 @@
-import { cleanTargets, compareJob, compareJobs, compareOrder, compareShare, deltaPct, formatPct, orderKey, parseMinutes, sameOrder, stepTargetMs, teamPraise, balanceMs, formatBalance, orderArticle } from '../src/domain/targets';
+import { cleanTargets, compareJob, compareJobs, compareOrder, compareShare, deltaPct, formatPct, orderKey, parseMinutes, sameOrder, stepTargetMs, teamPraise, balanceMs, formatBalance, orderArticle, scaleComparison, shareInRange } from '../src/domain/targets';
 import type { Article, Entry, Job } from '../src/domain/types';
 
 const MIN = 60_000;
@@ -195,5 +195,20 @@ describe('Gemeinsamer Auftrag erkennen (Fehler „beide positiv, obwohl zusammen
     expect(balanceMs(b.actualMs, b.targetMs!)).toBeLessThan(0);
     expect(formatBalance(balanceMs(a.actualMs, a.targetMs!))).toBe('−1h 30m');
     expect(formatBalance(30 * MIN)).toBe('+30m');
+  });
+});
+
+describe('Anteilig über Zeitraumgrenzen (#20)', () => {
+  const HOUR = 60 * MIN;
+  const seg = (start: number, end: number, workers = 1): Entry => ({ id: `r${n++}`, jobId: 'j', startAt: start, endAt: end, step: null, workers, ...meta });
+  it('Anteil = Personenzeit im Zeitraum ÷ gesamt', () => {
+    const entries = [seg(0, 2 * HOUR), seg(10 * HOUR, 13 * HOUR, 2)]; // 2 h + 6 h Personenzeit
+    expect(shareInRange(entries, { start: 0, end: 11 * HOUR }, 0)).toBeCloseTo(4 / 8);
+    expect(shareInRange(entries, { start: 11 * HOUR, end: 100 * HOUR }, 0)).toBeCloseTo(4 / 8);
+    expect(shareInRange([], { start: 0, end: 1 }, 0)).toBe(0);
+  });
+  it('Ist und Vorgabe werden gleich skaliert, Abweichung bleibt', () => {
+    const c = scaleComparison({ actualMs: 8 * HOUR, targetMs: 10 * HOUR, deltaPct: -20, byStep: [{ step: '', actualMs: 8 * HOUR, targetMs: 10 * HOUR }] }, 0.25);
+    expect(c).toMatchObject({ actualMs: 2 * HOUR, targetMs: 2.5 * HOUR, deltaPct: -20, byStep: [{ step: '', actualMs: 2 * HOUR, targetMs: 2.5 * HOUR }] });
   });
 });

@@ -260,6 +260,20 @@ export class SqliteJobRepository implements JobRepository {
     });
   }
 
+  async setWorkersAll(id: string, n: number): Promise<void> {
+    await this.require(id);
+    const workers = Math.min(20, Math.max(1, Math.round(n) || 1));
+    const now = Date.now();
+    await this.db.withTransactionAsync(async () => {
+      await this.db.runAsync('UPDATE entries SET workers = ?, updated_at = ? WHERE job_id = ? AND deleted_at IS NULL', workers, now, id);
+      await this.db.runAsync('UPDATE jobs SET workers = ?, updated_at = ? WHERE id = ?', workers, now, id);
+    });
+  }
+
+  async createFromHandover(): Promise<Job> {
+    throw new Error('Zeitübergaben gibt es nur mit Team-Sync.');
+  }
+
   async renameStep(scope: { articleId: string | null; section: Job['section']; jobId: string }, from: string, to: string): Promise<void> {
     const name = to.trim();
     if (!name || name === from) return;

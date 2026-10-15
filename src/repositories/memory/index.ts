@@ -11,6 +11,7 @@ import {
   type Millis,
   type ProductGroup,
   type Settings,
+  type TimeHandover,
 } from '../../domain/types';
 import { cleanSteps, withMainGroups } from '../../domain/flows';
 import { cleanTargets } from '../../domain/targets';
@@ -55,6 +56,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
   let settingsUpdatedAt: Millis = start?.settingsUpdatedAt ?? 0;
   let requests: DeletionRequest[] = (start?.deletionRequests ?? []).map((r) => ({ ...r }));
   let groups: ProductGroup[] = withMainGroups(start?.groups ?? []).map(copyGroup);
+  let handovers: TimeHandover[] = (start?.handovers ?? []).map(copyHandover);
 
   if (dimensions.length === 0) {
     dimensions = DEFAULT_DIMENSIONS.map((d, i) => ({
@@ -82,6 +84,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
     settingsUpdatedAt,
     deletionRequests: requests.map((r) => ({ ...r })),
     groups: groups.map(copyGroup),
+    handovers: handovers.map(copyHandover),
   });
   const changed = () => persist?.(snapshot());
   const findArticle = (number: string) => (number ? articles.find((a) => a.number === number && !a.deletedAt) : undefined);
@@ -162,6 +165,24 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         const r = requests.find((x) => x.id === id);
         if (!r) throw notFound('Löschvorschlag');
         Object.assign(r, { status, updatedAt: now(), ...(status === 'done' ? {} : { decidedBy: owner() }) });
+        changed();
+      },
+    },
+    handovers: {
+      async list() {
+        return handovers.filter((h) => !h.deletedAt).sort((a, b) => b.createdAt - a.createdAt).map(copyHandover);
+      },
+      async create(input) {
+        const t = now();
+        const h: TimeHandover = { ...input, segments: input.segments.map((s) => ({ ...s })), id: makeId(), from: owner(), status: 'open', createdAt: t, updatedAt: t, deletedAt: null };
+        handovers.push(h);
+        changed();
+        return copyHandover(h);
+      },
+      async setStatus(id, status) {
+        const h = handovers.find((x) => x.id === id);
+        if (!h) throw notFound('Übergabe');
+        Object.assign(h, { status, updatedAt: now() });
         changed();
       },
     },
@@ -269,6 +290,47 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         Object.assign(j, { currentStep: step, updatedAt: t });
         if (j.onlyStep) j.onlyStep = step;
         changed();
+      },
+      async setWorkersAll(id, n) {
+        const j = findJob(id);
+        const workers = clampWorkers(n);
+        const t = now();
+        for (const e of entries) if (e.jobId === id && !e.deletedAt && (e.workers ?? 1) !== workers) Object.assign(e, { workers, updatedAt: t });
+        Object.assign(j, { workers, updatedAt: t });
+        changed();
+      },
+      async createFromHandover(h) {
+        const t = now();
+        const segs = [...h.segments].sort((a, b) => a.startAt - b.startAt);
+        if (!segs.length) throw new Error('Keine Zeit zum Übernehmen.');
+        const job: Job = {
+          id: makeId(),
+          kind: 'order',
+          status: 'done',
+          parentJobId: null,
+          articleId: h.articleId,
+          orderNo: h.orderNo,
+          quantity: h.quantity,
+          note: `Übernommen von ${h.fromName}`,
+          valueIds: [],
+          reworkReason: null,
+          startedAt: segs[0].startAt,
+          finishedAt: segs[segs.length - 1].endAt,
+          createdBy: owner(),
+          currentStep: null,
+          onlyStep: null,
+          workers: 1,
+          section: h.section,
+          createdAt: t,
+          updatedAt: t,
+          deletedAt: null,
+        };
+        jobs.push(job);
+        for (const s of segs) {
+          entries.push({ id: makeId(), jobId: job.id, startAt: s.startAt, endAt: s.endAt, step: h.withSteps ? s.step : null, workers: 1, createdAt: t, updatedAt: t, deletedAt: null });
+        }
+        changed();
+        return copyJob(job);
       },
       async renameStep(scope, from, to) {
         const name = to.trim();
@@ -378,6 +440,55 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
           }
         }
         syncJobBounds(e.jobId);
+        changed();
+      },
+      async moveToSection(id, section) {
+        const e = entries.find((x) => x.id === id && !x.deletedAt);
+        if (!e) throw notFound('Abschnitt');
+        if (e.endAt === null) throw new Error('Den laufenden Abschnitt bitte erst pausieren.');
+        const src = findJob(e.jobId);
+        if ((src.section === 'display') === (section === 'display')) return;
+        const t = now();
+        let target = src.orderNo
+          ? jobs.find(
+              (j) =>
+                !j.deletedAt &&
+                j.id !== src.id &&
+                j.kind === 'order' &&
+                j.orderNo === src.orderNo &&
+                j.articleId === src.articleId &&
+                j.createdBy === src.createdBy &&
+                (j.section === 'display') === (section === 'display'),
+            )
+          : undefined;
+        if (!target) {
+          target = {
+            id: makeId(),
+            kind: 'order',
+            status: 'done',
+            parentJobId: null,
+            articleId: src.articleId,
+            orderNo: src.orderNo,
+            quantity: src.quantity,
+            note: '',
+            valueIds: [...src.valueIds],
+            reworkReason: null,
+            startedAt: e.startAt,
+            finishedAt: e.endAt,
+            createdBy: src.createdBy,
+            currentStep: null,
+            onlyStep: null,
+            workers: 1,
+            section,
+            createdAt: t,
+            updatedAt: t,
+            deletedAt: null,
+          };
+          jobs.push(target);
+        }
+        Object.assign(e, { jobId: target.id, updatedAt: t });
+        syncJobBounds(src.id);
+        syncJobBounds(target.id);
         changed();
       },
       async remove(id) {
@@ -572,6 +683,7 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
       settingsUpdatedAt = next.settingsUpdatedAt ?? settingsUpdatedAt;
       requests = (next.deletionRequests ?? []).map((r) => ({ ...r }));
       groups = withMainGroups(next.groups ?? []).map(copyGroup);
+      handovers = (next.handovers ?? []).map(copyHandover);
       changed();
     },
   };
@@ -584,6 +696,10 @@ function copyJob(j: Job): Job {
 /** Personenzähler: 1 bis 20 */
 function clampWorkers(n: number): number {
   return Math.min(20, Math.max(1, Math.round(n) || 1));
+}
+
+function copyHandover(h: TimeHandover): TimeHandover {
+  return { ...h, segments: h.segments.map((s) => ({ ...s })) };
 }
 
 function copyGroup(g: ProductGroup): ProductGroup {
