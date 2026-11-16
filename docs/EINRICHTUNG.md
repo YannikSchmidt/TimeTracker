@@ -185,6 +185,20 @@ Läuft ein Auftrag über das Wochen- bzw. Monatsende, zählt er in jedem Zeitrau
   Auftrag zählt danach nur noch dich; zusammen zählt die Zeit je Person auf dem Auftrag, die Vorgabe wird anteilig
   verteilt.
 
+## Erinnerung und Planer
+
+- **Erinnerung**: Läuft der Timer länger als eingestellt ohne Pause (*Einstellungen* → *Erinnerung*, Standard 2,5 h),
+  erscheint „Timer läuft seit … ohne Pause“: *Weiter* (nächste Nachfrage nach weiteren 2,5 h), *Stoppen* oder
+  „Aufgehört vor 15 / 30 / 60 min“ bzw. *Uhrzeit wählen* – dann endet die Zeit dort und alles danach wird gelöscht.
+  Mit *Benachrichtigungen erlauben* kommt sie auch als Systembenachrichtigung, solange die App im Hintergrund noch
+  läuft. Ohne Server kommt bei ganz geschlossener App keine Nachricht; die Frage erscheint beim nächsten Öffnen. Auf dem
+  iPhone gehen Benachrichtigungen nur in der zum Home-Bildschirm hinzugefügten App.
+- **Planer** (eigener Tab): Artikel suchen, Stückzahl eintragen. Die Vorgabezeiten (Rüsten + pro Stück, über alle
+  Schritte; Gesamtgeräte mit Display-Verheiratung und Gesamtmontage) ergeben die Gesamtzeit in Stunden und
+  Arbeitstagen. Grundlage ist die eigene Wochenarbeitszeit unter *Einstellungen* → *Arbeitszeit* (z.B. 30 h an 5 Tagen
+  = 6 h pro Tag). Der Balken zeigt die diese Woche schon gearbeitete Zeit plus die geplante; je Artikel steht, wie viele
+  Stück noch in die Woche passen. Artikel ohne Vorgabezeit zählen nicht mit.
+
 ## Admin und Löschen
 
 Löschen dürfen nur Admins (Liste `ADMINS` in `src/sync/config.ts`, derzeit `YannikSchmidt`). Alle anderen sehen

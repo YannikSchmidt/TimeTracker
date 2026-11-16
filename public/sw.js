@@ -37,3 +37,15 @@ self.addEventListener('fetch', (event) => {
       }),
   );
 });
+
+// Tipp auf eine Benachrichtigung (z.B. „Timer läuft seit 2:30 ohne Pause“) → App in den Vordergrund holen bzw. öffnen.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const open = list.find((c) => c.url.startsWith(self.registration.scope));
+      if (open) return open.focus();
+      return self.clients.openWindow(self.registration.scope);
+    }),
+  );
+});

@@ -72,7 +72,15 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
 - **Statistik über Zeitraumgrenzen**: Läuft ein Auftrag über das Wochen- bzw. Monatsende, zählt er anteilig nach der
   Zeit im Zeitraum (Ist und Vorgabe gleichermaßen).
 - **Lager-Artikel** mit der Endung „LA“ (z.B. 07123456LA) werden wie normale Gesamtgeräte bzw. Fronten erkannt.
-- **Einstellungen**: Standard-Stückzahl, Nummernmuster, Merkmale, Team-Sync, CSV-Export pro Auftrag, JSON-Backup.
+- **Erinnerung bei langer Laufzeit**: Läuft der Timer 2,5 h (einstellbar, auch aus) ohne Pause, fragt die App „Weiter“
+  oder „Stoppen“ – oder „vergessen auszumachen?“: aufgehört vor 15/30/60 min bzw. um eine gewählte Uhrzeit (die Zeit
+  danach wird gelöscht). Im Hintergrund zusätzlich als Benachrichtigung, wenn erlaubt (ohne Server: nicht bei ganz
+  geschlossener App).
+- **Planer**: Artikel mit Stückzahl eintragen → Vorgabezeit gesamt in Stunden, Arbeitstagen und Wochen, was diese Woche
+  nach der schon gearbeiteten Zeit noch frei ist und wie viele Stück je Artikel noch reinpassen. Die Liste bleibt
+  gespeichert, bis sie geleert wird.
+- **Einstellungen**: Standard-Stückzahl, Arbeitszeit (Wochenstunden, Arbeitstage – pro Person), Erinnerung,
+  Nummernmuster, Merkmale, Team-Sync, CSV-Export pro Auftrag, JSON-Backup.
 
 ## Entwickeln und testen
 
@@ -120,7 +128,7 @@ npm run lint        # ESLint
 
 ```
 src/
-  app/                 Screens (Expo Router): Timer, Einträge, Statistik, Einstellungen, Eintrag bearbeiten
+  app/                 Screens (Expo Router): Timer, Einträge, Artikel, Planer, Statistik, Einstellungen, Eintrag bearbeiten
   components/          UI-Bausteine, Diagramme (react-native-svg), Merkmal-Auswahl, Datum/Uhrzeit
   data/DataProvider    Repositories per Context + useQuery (lädt nach Änderungen automatisch neu)
   db/                  SQLite-Migrationen

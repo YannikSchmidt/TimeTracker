@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { LongRunReminder } from '../components/LongRunReminder';
 import { StorageRoot } from '../data/StorageRoot';
 import { setupPwa } from '../lib/pwa';
 import { setupUpdates } from '../lib/updates';
@@ -29,6 +30,7 @@ export default function RootLayout() {
           <Stack.Screen name="flows" options={{ title: 'Abläufe' }} />
           <Stack.Screen name="feedback" options={{ presentation: 'modal', title: 'Verbesserung vorschlagen' }} />
         </Stack>
+        <LongRunReminder />
       </StorageRoot>
       <StatusBar style="auto" />
     </ThemeProvider>
