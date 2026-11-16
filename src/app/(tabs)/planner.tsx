@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { Card, Empty, SectionTitle } from '../../components/ui';
 import { useData } from '../../data/DataProvider';
-import { formatDecimal, planItemMs, planSummary, planTarget } from '../../domain/planner';
+import { formatDecimal, newPlanId, normalizePlan, orderNumbers, planItemMs, planSummary, planTarget } from '../../domain/planner';
 import { suggestQuantity } from '../../domain/quantity';
 import { periodRange, totalMs } from '../../domain/stats';
 import { formatDuration } from '../../domain/time';
@@ -31,7 +31,7 @@ export default function PlannerScreen() {
 
   const settings = work.settings;
   const items: PlanItem[] = useMemo(
-    () => (settings.planner ?? []).filter((i) => articles.byId.has(i.articleId) || !articles.loaded),
+    () => normalizePlan(settings.planner).filter((i) => articles.byId.has(i.articleId) || !articles.loaded),
     [settings.planner, articles],
   );
   const save = (next: PlanItem[]) => mutate((r) => r.settings.set({ planner: next }));
@@ -49,16 +49,21 @@ export default function PlannerScreen() {
     workedMs,
   );
 
+  // jede Zeile ist ein eigener Auftrag – derselbe Artikel darf mehrmals vorkommen (Rüstzeit je Auftrag)
   const add = (articleId: string) => {
     setQuery('');
-    const existing = items.find((i) => i.articleId === articleId);
-    if (existing) return;
     const quantity = suggestQuantity(work.jobs, articleId, settings.defaultQuantity).quantity || 1;
-    void save([...items, { articleId, quantity }]);
+    void save([...items, { id: newPlanId(), articleId, quantity }]);
   };
-  const setQty = (articleId: string, quantity: number) =>
-    void save(items.map((i) => (i.articleId === articleId ? { ...i, quantity: Math.max(0, Math.min(9999, quantity)) } : i)));
-  const remove = (articleId: string) => void save(items.filter((i) => i.articleId !== articleId));
+  const duplicate = (item: PlanItem) => {
+    const i = items.findIndex((x) => x.id === item.id);
+    void save([...items.slice(0, i + 1), { ...item, id: newPlanId() }, ...items.slice(i + 1)]);
+  };
+  const setQty = (id: string, quantity: number) =>
+    void save(items.map((i) => (i.id === id ? { ...i, quantity: Math.max(0, Math.min(9999, quantity)) } : i)));
+  const remove = (id: string) => void save(items.filter((i) => i.id !== id));
+  const numbers = orderNumbers(items);
+  const orderCount = rows.filter((r) => r.target.hasTarget && r.item.quantity > 0).length;
 
   const hits = query.trim() ? matchArticles(articles.articles, query, 6) : [];
   const weekMs = summary.weekMs || 1;
@@ -74,7 +79,8 @@ export default function PlannerScreen() {
           {formatDuration(summary.totalMs)}
         </Text>
         <Text style={{ color: p.text }}>
-          = {formatDecimal(summary.days)} Arbeitstage · {formatDecimal(summary.weeks, 2)} Wochen
+          = {formatDecimal(summary.days)} Arbeitstage · {formatDecimal(summary.weeks, 2)} Wochen · {orderCount}{' '}
+          {orderCount === 1 ? 'Auftrag' : 'Aufträge'}
         </Text>
         <View style={[styles.bar, { backgroundColor: p.track }]}>
           <View style={{ width: `${workedPct}%`, backgroundColor: p.muted }} />
@@ -133,17 +139,17 @@ export default function PlannerScreen() {
       >
         Planung
       </SectionTitle>
-      {rows.length === 0 && <Empty text="Noch nichts geplant. Artikel suchen und mit Stückzahl eintragen – die Liste bleibt gespeichert." />}
+      {rows.length === 0 && <Empty text="Noch nichts geplant. Artikel suchen und mit Stückzahl eintragen – jede Zeile ist ein Auftrag mit eigener Rüstzeit, derselbe Artikel kann mehrmals vorkommen. Die Liste bleibt gespeichert." />}
       {rows.map(({ item, article, target, ms }, i) => {
         const fits = summary.fitsMore[i];
-        const label = article ? articleLabel(article) : 'Artikel';
+        const label = (article ? articleLabel(article) : 'Artikel') + (numbers[i] ? ` (Auftrag ${numbers[i]})` : '');
         return (
-          <Card key={item.articleId} style={{ gap: spacing.sm }}>
+          <Card key={item.id} style={{ gap: spacing.sm }}>
             <View style={styles.rowHead}>
               <Text style={[styles.rowTitle, { color: p.text }]} numberOfLines={2}>
                 {label}
               </Text>
-              <Pressable accessibilityRole="button" accessibilityLabel={`${label} entfernen`} onPress={() => remove(item.articleId)} hitSlop={8}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`${label} entfernen`} onPress={() => remove(item.id)} hitSlop={8}>
                 <Ionicons name="close" size={20} color={p.muted} />
               </Pressable>
             </View>
@@ -152,14 +158,14 @@ export default function PlannerScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="weniger"
-                  onPress={() => setQty(item.articleId, item.quantity - 1)}
+                  onPress={() => setQty(item.id, item.quantity - 1)}
                   style={[styles.stepBtn, { backgroundColor: p.track }]}
                 >
                   <Ionicons name="remove" size={18} color={p.text} />
                 </Pressable>
                 <TextInput
                   value={String(item.quantity)}
-                  onChangeText={(t) => setQty(item.articleId, Number.parseInt(t.replace(/[^0-9]/g, ''), 10) || 0)}
+                  onChangeText={(t) => setQty(item.id, Number.parseInt(t.replace(/[^0-9]/g, ''), 10) || 0)}
                   keyboardType="number-pad"
                   accessibilityLabel={`Stückzahl ${label}`}
                   style={[styles.qty, { color: p.text, borderColor: p.border }]}
@@ -167,7 +173,7 @@ export default function PlannerScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="mehr"
-                  onPress={() => setQty(item.articleId, item.quantity + 1)}
+                  onPress={() => setQty(item.id, item.quantity + 1)}
                   style={[styles.stepBtn, { backgroundColor: p.track }]}
                 >
                   <Ionicons name="add" size={18} color={p.text} />
@@ -185,6 +191,16 @@ export default function PlannerScreen() {
             ) : (
               <Text style={{ color: p.warning, fontSize: 13 }}>Keine Vorgabezeit hinterlegt – zählt nicht mit.</Text>
             )}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Weiterer Auftrag ${label}`}
+              onPress={() => duplicate(item)}
+              style={styles.more}
+              hitSlop={6}
+            >
+              <Ionicons name="add" size={16} color={p.primary} />
+              <Text style={{ color: p.primary, fontSize: 13 }}>weiterer Auftrag (eigene Rüstzeit)</Text>
+            </Pressable>
           </Card>
         );
       })}
@@ -206,5 +222,6 @@ const styles = StyleSheet.create({
   stepper: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   stepBtn: { width: 36, height: 36, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
   qty: { width: 64, height: 36, borderWidth: 1, borderRadius: radius.sm, textAlign: 'center', fontSize: 16 },
+  more: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
   rowMs: { fontSize: 16, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

@@ -1,5 +1,5 @@
 import { pauseAtError, runningSince } from '../src/domain/jobs';
-import { formatDecimal, planItemMs, planSummary, planTarget } from '../src/domain/planner';
+import { formatDecimal, normalizePlan, orderNumbers, planItemMs, planSummary, planTarget } from '../src/domain/planner';
 import type { Article } from '../src/domain/types';
 import { createMemoryStore } from '../src/repositories/memory';
 
@@ -99,5 +99,21 @@ describe('Planer (#28, #29)', () => {
     expect(over.fitsMore).toEqual([0]);
     // Zeile mit 0 Stück: Rüstzeit kommt noch dazu
     expect(planSummary([{ target: t1, quantity: 0 }], 1, 1, 0).fitsMore).toEqual([2]);
+  });
+
+  it('derselbe Artikel als mehrere Aufträge: jede Zeile zählt ihre Rüstzeit', () => {
+    const t = { setupMs: 30 * MIN, perPieceMs: 15 * MIN, hasTarget: true };
+    const two = planSummary([{ target: t, quantity: 30 }, { target: t, quantity: 30 }], 30, 5, 0);
+    const one = planSummary([{ target: t, quantity: 60 }], 30, 5, 0);
+    expect(two.totalMs).toBe(16 * HOUR);
+    expect(two.totalMs - one.totalMs).toBe(30 * MIN);
+  });
+
+  it('ältere Listen ohne Zeilen-ID bekommen eindeutige IDs; Auftragsnummern nur bei Mehrfach-Artikeln', () => {
+    const items = normalizePlan([{ articleId: 'a', quantity: 1 }, { articleId: 'a', quantity: 2 }, { id: 'x', articleId: 'b', quantity: 3 }]);
+    expect(new Set(items.map((i) => i.id)).size).toBe(3);
+    expect(items[2].id).toBe('x');
+    expect(orderNumbers(items)).toEqual([1, 2, null]);
+    expect(normalizePlan(undefined)).toEqual([]);
   });
 });

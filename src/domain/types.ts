@@ -127,11 +127,13 @@ export interface Settings {
   /** Erinnerung, wenn der Timer so lange ohne Pause läuft (Minuten, 0 = aus; fehlt = Standard) */
   longRunMinutes?: number;
   /** Gemerkte Liste im Planer */
-  planner?: PlanItem[];
+  planner?: (Omit<PlanItem, 'id'> & { id?: string })[];
 }
 
-/** Zeile im Planer: Artikel und Stückzahl */
+/** Zeile im Planer = ein Auftrag: Artikel und Stückzahl (derselbe Artikel kann mehrmals vorkommen) */
 export interface PlanItem {
+  /** Zeilen-ID (fehlt in Listen älterer Versionen → normalizePlan) */
+  id: string;
   articleId: string;
   quantity: number;
 }
