@@ -32,6 +32,11 @@ export interface JobRepository {
   get(id: string): Promise<Job | null>;
   start(input: JobStartInput): Promise<Job>;
   pause(id: string): Promise<void>;
+  /**
+   * Nachträglich pausieren („vergessen auszumachen“): Der Lauf endet um `at` – Abschnitte danach werden gelöscht,
+   * der Abschnitt mit `at` endet dort. `at` muss im aktuellen Lauf ohne Pause liegen.
+   */
+  pauseAt(id: string, at: Millis): Promise<void>;
   resume(id: string): Promise<void>;
   /** Beendet den Auftrag (laufender Abschnitt wird geschlossen). */
   finish(id: string, extra?: { reworkReason?: string | null }): Promise<void>;

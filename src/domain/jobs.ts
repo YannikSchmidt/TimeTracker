@@ -108,3 +108,32 @@ export function personSegments(entries: Entry[], k: number): { startAt: Millis; 
     .sort((a, b) => a.startAt - b.startAt)
     .map((e) => ({ startAt: e.startAt, endAt: e.endAt!, step: e.step ?? null }));
 }
+
+/** Lücke zwischen Abschnitten, die noch als „ohne Pause“ gilt (Schrittwechsel, Personenzähler). */
+const CONTIGUOUS_GAP_MS = 2000;
+
+/**
+ * Beginn des aktuellen durchgehenden Laufs: vom laufenden Abschnitt rückwärts über lückenlos anschließende
+ * Abschnitte (Schrittwechsel und Personenzähler erzeugen neue Abschnitte ohne Pause). null = läuft nicht.
+ */
+export function runningSince(entries: Entry[], now: Millis = Date.now()): Millis | null {
+  const own = entries.filter((e) => !e.deletedAt).sort((a, b) => a.startAt - b.startAt);
+  const last = own[own.length - 1];
+  if (!last || last.endAt !== null || last.startAt > now) return null;
+  let since = last.startAt;
+  for (let i = own.length - 2; i >= 0; i--) {
+    const end = own[i].endAt;
+    if (end === null || since - end > CONTIGUOUS_GAP_MS) break;
+    since = Math.min(since, own[i].startAt);
+  }
+  return since;
+}
+
+/** Prüft eine „Aufgehört um“-Zeit für `pauseAt`; liefert eine Fehlermeldung oder null. */
+export function pauseAtError(entries: Entry[], at: Millis, now: Millis): string | null {
+  const since = runningSince(entries, now);
+  if (since === null) return 'Der Auftrag läuft nicht.';
+  if (at <= since) return 'Die Uhrzeit liegt vor dem Beginn ohne Pause.';
+  if (at >= now) return 'Die Uhrzeit liegt in der Zukunft.';
+  return null;
+}

@@ -124,7 +124,20 @@ export interface Settings {
   defaultQuantity: number;
   /** Muster zum Erkennen gescannter Nummern (Auftrag / Gesamtgerät / Front) */
   codePatterns: CodePatterns;
+  /** Erinnerung, wenn der Timer so lange ohne Pause läuft (Minuten, 0 = aus; fehlt = Standard) */
+  longRunMinutes?: number;
+  /** Gemerkte Liste im Planer */
+  planner?: PlanItem[];
 }
+
+/** Zeile im Planer: Artikel und Stückzahl */
+export interface PlanItem {
+  articleId: string;
+  quantity: number;
+}
+
+/** Standard für die Erinnerung bei langer Laufzeit: 2,5 Stunden */
+export const DEFAULT_LONG_RUN_MINUTES = 150;
 
 export const DEFAULT_SETTINGS: Settings = {
   weeklyTargetHours: 40,

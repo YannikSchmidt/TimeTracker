@@ -15,6 +15,7 @@ import {
 } from '../../domain/types';
 import { cleanSteps, withMainGroups } from '../../domain/flows';
 import { cleanTargets } from '../../domain/targets';
+import { pauseAtError } from '../../domain/jobs';
 import { jobFieldsWithDefaults, sortOpenJobs, type JobStartInput, type Repositories } from '../types';
 import { duplicateArticleError, normalizeArticleNumber, notFound, validateQuantity, validateTimes } from '../validation';
 
@@ -241,6 +242,19 @@ export function createMemoryStore({ initial, persist, makeId, now = Date.now, ow
         const j = findJob(id);
         if (j.status !== 'running') return;
         closeOpen(now(), id);
+        changed();
+      },
+      async pauseAt(id, at) {
+        const j = findJob(id);
+        const t = now();
+        const own = entries.filter((e) => e.jobId === id && !e.deletedAt);
+        const err = j.status === 'running' ? pauseAtError(own, at, t) : 'Der Auftrag läuft nicht.';
+        if (err) throw new Error(err);
+        for (const e of own) {
+          if (e.startAt >= at) Object.assign(e, { deletedAt: t, updatedAt: t });
+          else if (e.endAt === null || e.endAt > at) Object.assign(e, { endAt: at, updatedAt: t });
+        }
+        Object.assign(j, { status: 'paused', updatedAt: t });
         changed();
       },
       async resume(id) {

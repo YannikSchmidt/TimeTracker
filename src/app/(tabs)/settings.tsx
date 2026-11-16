@@ -6,16 +6,17 @@ import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, V
 import { CodePatternsCard } from '../../components/CodePatternsCard';
 import { DeletionRequestsCard } from '../../components/DeletionRequestsCard';
 import { SyncBadge } from '../../components/SyncBadge';
-import { Button, Card, Chip, SectionTitle } from '../../components/ui';
+import { Button, Card, Chip, SectionTitle, Segmented } from '../../components/ui';
 import { useData, useQuery } from '../../data/DataProvider';
 import { DEFAULT_CODE_PATTERNS } from '../../domain/codes';
 import { jobsToCsv } from '../../domain/export';
 import { articleForSection, compareJob } from '../../domain/targets';
-import type { Dimension } from '../../domain/types';
+import { DEFAULT_LONG_RUN_MINUTES, type Dimension } from '../../domain/types';
 import { useDimensions, type DimensionsData } from '../../hooks/useDimensions';
 import { useGroups } from '../../hooks/useGroups';
 import { useWork } from '../../hooks/useWork';
 import { pickTextFile, shareTextFile } from '../../lib/files';
+import { notifyPermission, requestNotifyPermission, type NotifyPermission } from '../../lib/notify';
 import { useAppUpdate } from '../../lib/updates';
 import { APP_VERSION, shortVersion } from '../../lib/version';
 import type { BackupData } from '../../repositories/types';
@@ -42,6 +43,28 @@ export default function SettingsScreen() {
     setQtyFor(settings.defaultQuantity);
     setQty(String(settings.defaultQuantity));
   }
+
+  const [hours, setHours] = useState('');
+  const [hoursFor, setHoursFor] = useState<number | null>(null);
+  if (settings && settings.weeklyTargetHours !== hoursFor) {
+    setHoursFor(settings.weeklyTargetHours);
+    setHours(String(settings.weeklyTargetHours).replace('.', ','));
+  }
+  const saveHours = () => {
+    const value = Number.parseFloat(hours.replace(',', '.'));
+    if (Number.isFinite(value) && value > 0 && value <= 80) {
+      void mutate((r) => r.settings.set({ weeklyTargetHours: Math.round(value * 4) / 4 }));
+    } else if (settings) {
+      setHours(String(settings.weeklyTargetHours).replace('.', ','));
+    }
+  };
+  const toggleDay = (day: number) => {
+    if (!settings) return;
+    const days = settings.workDays.includes(day) ? settings.workDays.filter((d) => d !== day) : [...settings.workDays, day].sort();
+    if (days.length) void mutate((r) => r.settings.set({ workDays: days }));
+  };
+  const [permission, setPermission] = useState<NotifyPermission>(() => notifyPermission());
+  const longRun = String(settings?.longRunMinutes ?? DEFAULT_LONG_RUN_MINUTES);
 
   const saveQty = () => {
     const value = Number.parseInt(qty, 10);
@@ -110,6 +133,69 @@ export default function SettingsScreen() {
         <Text style={{ color: p.muted, fontSize: 12 }}>
           Wird beim Start vorgeschlagen. Hat ein Artikel schon Einträge, wird stattdessen seine häufigste Stückzahl vorgeschlagen.
         </Text>
+      </Card>
+
+      <SectionTitle>Arbeitszeit</SectionTitle>
+      <Card style={{ gap: spacing.sm }}>
+        <View style={styles.row}>
+          <Text style={[styles.label, { color: p.text, flex: 1 }]}>Wochenarbeitszeit (Std.)</Text>
+          <TextInput
+            value={hours}
+            onChangeText={(t) => setHours(t.replace(/[^0-9,.]/g, ''))}
+            onBlur={saveHours}
+            keyboardType="decimal-pad"
+            accessibilityLabel="Wochenarbeitszeit"
+            style={[styles.smallInput, { color: p.text, borderColor: p.border }]}
+          />
+        </View>
+        <Text style={[styles.label, { color: p.text }]}>Arbeitstage</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+          {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((label, i) => (
+            <Chip key={label} label={label} selected={!!settings?.workDays.includes(i + 1)} onPress={() => toggleDay(i + 1)} />
+          ))}
+        </View>
+        <Text style={{ color: p.muted, fontSize: 12 }}>
+          Nur für dich. Der Planer rechnet damit Stunden in Arbeitstage um (Stunden pro Tag = Wochenarbeitszeit ÷ Arbeitstage).
+        </Text>
+      </Card>
+
+      <SectionTitle>Erinnerung</SectionTitle>
+      <Card style={{ gap: spacing.sm }}>
+        <Text style={[styles.label, { color: p.text }]}>Nachfragen, wenn der Timer so lange ohne Pause läuft</Text>
+        <Segmented
+          options={[
+            { value: '0', label: 'Aus' },
+            { value: '90', label: '1,5 h' },
+            { value: '120', label: '2 h' },
+            { value: '150', label: '2,5 h' },
+            { value: '180', label: '3 h' },
+          ]}
+          value={['0', '90', '120', '150', '180'].includes(longRun) ? longRun : '150'}
+          onChange={(v) => void mutate((r) => r.settings.set({ longRunMinutes: Number(v) }))}
+        />
+        <Text style={{ color: p.muted, fontSize: 12 }}>
+          Dann kannst du weitermachen, stoppen oder angeben, dass du schon vor 15/30/60 Minuten bzw. um eine bestimmte Uhrzeit
+          aufgehört hast.
+        </Text>
+        {permission === 'default' && (
+          <Button
+            title="Benachrichtigungen erlauben"
+            icon="notifications-outline"
+            variant="secondary"
+            onPress={() => void requestNotifyPermission().then(setPermission)}
+          />
+        )}
+        {permission !== 'unsupported' && (
+          <Text style={{ color: p.muted, fontSize: 12 }}>
+            {permission === 'granted'
+              ? 'Benachrichtigungen sind erlaubt: Die Nachfrage kommt auch, wenn die App im Hintergrund läuft.'
+              : permission === 'denied'
+                ? 'Benachrichtigungen sind im Browser blockiert – die Nachfrage erscheint beim Öffnen der App.'
+                : 'Ohne Erlaubnis erscheint die Nachfrage, sobald du die App öffnest.'}{' '}
+            Bei ganz geschlossener App kommt keine Nachricht. Auf dem iPhone gehen Benachrichtigungen nur in der zum
+            Home-Bildschirm hinzugefügten App.
+          </Text>
+        )}
       </Card>
 
       <SectionTitle>Nummern erkennen</SectionTitle>

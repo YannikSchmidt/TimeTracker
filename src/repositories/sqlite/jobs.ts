@@ -1,7 +1,8 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { newId } from '../../db/ids';
-import type { Job, JobFields, Millis } from '../../domain/types';
+import { pauseAtError } from '../../domain/jobs';
+import type { Entry, Job, JobFields, Millis } from '../../domain/types';
 import { jobFieldsWithDefaults, sortOpenJobs, type JobRepository, type JobStartInput } from '../types';
 import { notFound, validateQuantity, validateTimes } from '../validation';
 
@@ -192,6 +193,25 @@ export class SqliteJobRepository implements JobRepository {
     const job = await this.require(id);
     if (job.status !== 'running') return;
     await this.db.withTransactionAsync(() => this.closeOpen(Date.now(), id));
+  }
+
+  async pauseAt(id: string, at: Millis): Promise<void> {
+    const job = await this.require(id);
+    const now = Date.now();
+    const own = await this.db.getAllAsync<{ id: string; start_at: number; end_at: number | null }>(
+      'SELECT id, start_at, end_at FROM entries WHERE job_id = ? AND deleted_at IS NULL',
+      id,
+    );
+    const asEntries = own.map((r) => ({ startAt: r.start_at, endAt: r.end_at, deletedAt: null }) as Entry);
+    const err = job.status === 'running' ? pauseAtError(asEntries, at, now) : 'Der Auftrag läuft nicht.';
+    if (err) throw new Error(err);
+    await this.db.withTransactionAsync(async () => {
+      for (const r of own) {
+        if (r.start_at >= at) await this.db.runAsync('UPDATE entries SET deleted_at = ?, updated_at = ? WHERE id = ?', now, now, r.id);
+        else if (r.end_at === null || r.end_at > at) await this.db.runAsync('UPDATE entries SET end_at = ?, updated_at = ? WHERE id = ?', at, now, r.id);
+      }
+      await this.db.runAsync("UPDATE jobs SET status = 'paused', updated_at = ? WHERE id = ?", now, id);
+    });
   }
 
   async resume(id: string): Promise<void> {
