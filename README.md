@@ -77,8 +77,9 @@ Gebaut mit [Expo](https://expo.dev) / React Native und TypeScript; dieselbe Code
   danach wird gelöscht). Im Hintergrund zusätzlich als Benachrichtigung, wenn erlaubt (ohne Server: nicht bei ganz
   geschlossener App).
 - **Planer**: Artikel mit Stückzahl eintragen → Vorgabezeit gesamt in Stunden, Arbeitstagen und Wochen, was diese Woche
-  nach der schon gearbeiteten Zeit noch frei ist und wie viele Stück je Artikel noch reinpassen. Die Liste bleibt
-  gespeichert, bis sie geleert wird.
+  nach der schon gearbeiteten Zeit noch frei ist und wie viele Stück je Artikel noch reinpassen. Jede Zeile ist ein
+  Auftrag mit eigener Rüstzeit – derselbe Artikel kann mehrmals eingetragen werden. Die Liste bleibt gespeichert, bis
+  sie geleert wird.
 - **Einstellungen**: Standard-Stückzahl, Arbeitszeit (Wochenstunden, Arbeitstage – pro Person), Erinnerung,
   Nummernmuster, Merkmale, Team-Sync, CSV-Export pro Auftrag, JSON-Backup.
 

@@ -1,5 +1,5 @@
 import { articleForSection, targetSteps } from './targets';
-import type { Article, Millis, Section } from './types';
+import type { Article, Millis, PlanItem, Section } from './types';
 
 const MIN = 60_000;
 const HOUR = 3_600_000;
@@ -87,4 +87,33 @@ export function planSummary(
 export function formatDecimal(n: number, digits = 1): string {
   const f = 10 ** digits;
   return String(Math.round(n * f) / f).replace('.', ',');
+}
+
+/** Gespeicherte Planer-Liste mit eindeutigen Zeilen-IDs (ältere Einträge ohne ID bekommen eine abgeleitete). */
+export function normalizePlan(items: (Omit<PlanItem, 'id'> & { id?: string })[] | undefined): PlanItem[] {
+  const seen = new Set<string>();
+  return (items ?? []).map((item, i) => {
+    let id = item.id || `${item.articleId}-${i}`;
+    while (seen.has(id)) id += '+';
+    seen.add(id);
+    return { ...item, id };
+  });
+}
+
+/** Neue Zeilen-ID */
+export function newPlanId(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Nummer des Auftrags bei mehrfach eingetragenem Artikel („Auftrag 2“), sonst null */
+export function orderNumbers(items: PlanItem[]): (number | null)[] {
+  const total = new Map<string, number>();
+  for (const i of items) total.set(i.articleId, (total.get(i.articleId) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return items.map((i) => {
+    if ((total.get(i.articleId) ?? 0) < 2) return null;
+    const n = (seen.get(i.articleId) ?? 0) + 1;
+    seen.set(i.articleId, n);
+    return n;
+  });
 }

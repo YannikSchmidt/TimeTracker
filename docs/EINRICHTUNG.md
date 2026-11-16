@@ -197,7 +197,9 @@ Läuft ein Auftrag über das Wochen- bzw. Monatsende, zählt er in jedem Zeitrau
   Schritte; Gesamtgeräte mit Display-Verheiratung und Gesamtmontage) ergeben die Gesamtzeit in Stunden und
   Arbeitstagen. Grundlage ist die eigene Wochenarbeitszeit unter *Einstellungen* → *Arbeitszeit* (z.B. 30 h an 5 Tagen
   = 6 h pro Tag). Der Balken zeigt die diese Woche schon gearbeitete Zeit plus die geplante; je Artikel steht, wie viele
-  Stück noch in die Woche passen. Artikel ohne Vorgabezeit zählen nicht mit.
+  Stück noch in die Woche passen. Artikel ohne Vorgabezeit zählen nicht mit. Jede Zeile ist ein eigener Auftrag mit
+  eigener Rüstzeit: Denselben Artikel einfach nochmal hinzufügen oder „weiterer Auftrag“ tippen (2 Aufträge à 30 Stück
+  = 2 × Rüsten, 1 Auftrag à 60 Stück = 1 × Rüsten).
 
 ## Admin und Löschen
 
